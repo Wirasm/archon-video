@@ -1,0 +1,19 @@
+name: video-judge-pair
+description: "Support block for video-make: one pairwise judgment between two video openings."
+# Many instances run side by side inside one make run; none of them touch the checkout.
+mutates_checkout: false
+inputs:
+  pair: { required: true, description: "{pair_id, a, b}: two openings as JSON" }
+  context: { required: true, description: "Brand, kind and format context" }
+returns: judge
+
+nodes:
+  - id: judge
+    command: judge
+    model: medium
+    output_format:
+      type: object
+      properties:
+        reason: { type: string }
+        winner: { type: string, enum: [A, B] }
+      required: [reason, winner]

@@ -26,3 +26,144 @@ nodes:
         moods: { type: array, items: { type: string } }
         context: { type: string }
       required: [kind, format, config_digest, length_min, length_max, moods, context]
+
+  # ── Hooks: five openings, a pairwise tournament, the best three ──────────
+  - id: hooks
+    command: hooks
+    model: large
+    depends_on: [preflight]
+    output_format:
+      type: object
+      properties:
+        hooks:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              angle: { type: string }
+              spoken: { type: string }
+              overlay: { type: string }
+              first_frame: { type: string }
+            required: [id, angle, spoken, overlay, first_frame]
+      required: [hooks]
+
+  - id: pairs
+    script: pairs
+    runtime: uv
+    timeout: 30000
+    depends_on: [hooks]
+    with:
+      hooks: $hooks.output.hooks
+    output_format:
+      type: object
+      properties:
+        pairs: { type: array, items: { type: object } }
+      required: [pairs]
+
+  - id: judge
+    include: video-judge-pair
+    depends_on: [pairs]
+    with:
+      context: $preflight.output.context
+    fan_out:
+      items: "$pairs.output.pairs"
+      as: pair
+      max_parallel: 5
+
+  - id: rank
+    script: rank
+    runtime: uv
+    timeout: 30000
+    depends_on: [judge]
+    with:
+      hooks: $hooks.output.hooks
+      pairs: $pairs.output.pairs
+      verdicts: $judge.output
+    output_format:
+      type: object
+      properties:
+        top: { type: array, items: { type: object } }
+        table: { type: string }
+      required: [top, table]
+
+  # ── Scripts and the one human decision ───────────────────────────────────
+  - id: scripts
+    command: scripts
+    model: large
+    depends_on: [rank]
+    output_format:
+      type: object
+      properties:
+        scripts:
+          type: array
+          items:
+            type: object
+            properties:
+              hook_id: { type: string }
+              title: { type: string }
+              narration: { type: string }
+              overlay: { type: string }
+              first_frame: { type: string }
+              notes: { type: string }
+            required: [hook_id, title, narration, overlay, first_frame, notes]
+      required: [scripts]
+
+  - id: present
+    script: present
+    runtime: uv
+    timeout: 30000
+    depends_on: [scripts]
+    with:
+      top: $rank.output.top
+      table: $rank.output.table
+      scripts: $scripts.output.scripts
+    output_format:
+      type: object
+      properties:
+        text: { type: string }
+        ordered: { type: array, items: { type: object } }
+      required: [text, ordered]
+
+  - id: pick-gate
+    depends_on: [present]
+    approval:
+      capture_response: true
+      message: |
+        Pick the script to make. Nothing has been spent on voice or footage yet.
+
+        $present.output.text
+
+        Approve with a comment naming the script (1, 2 or 3) and any edits in plain words.
+        An empty comment makes script 1 unchanged. Reject to stop.
+
+  - id: pick
+    command: pick
+    model: medium
+    depends_on: [pick-gate]
+    output_format:
+      type: object
+      properties:
+        choice: { type: integer }
+        changes: { type: string }
+        title: { type: string }
+        narration: { type: string }
+        overlay: { type: string }
+        first_frame: { type: string }
+      required: [choice, changes, title, narration, overlay, first_frame]
+
+  - id: copy
+    command: copy
+    model: medium
+    depends_on: [pick]
+    output_format:
+      type: object
+      properties:
+        youtube_title: { type: string }
+        youtube_description: { type: string }
+        youtube_tags: { type: array, items: { type: string } }
+        tiktok_caption: { type: string }
+        instagram_caption: { type: string }
+        hashtags: { type: array, items: { type: string } }
+        alt_text: { type: string }
+      required: [youtube_title, youtube_description, youtube_tags, tiktok_caption, instagram_caption, hashtags, alt_text]
