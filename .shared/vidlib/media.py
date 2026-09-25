@@ -8,8 +8,9 @@ from pathlib import Path
 
 LOUDNESS = {"I": -14.0, "TP": -1.0, "LRA": 11.0}
 # Normalise with extra true-peak headroom: the AAC encode after loudnorm raises
-# peaks by a few tenths of a dB, and QC checks the encoded file against TP.
-TP_HEADROOM = 0.5
+# true peak, and QC checks the encoded file. Observed: 0.64 dB on a dense,
+# music-heavy mix (-1.50 dBTP in the wav, -0.86 in the MP4), so 0.5 was not enough.
+TP_HEADROOM = 1.2
 # Delivery encode for every format: H.264 High, yuv420p, AAC 48 kHz, moov first.
 ENCODE = [
     "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "17",
