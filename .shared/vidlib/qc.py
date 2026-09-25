@@ -1,7 +1,8 @@
 """Measured QC on the finished video.
 
 Only what can be measured. Global failures mean the render is broken and the
-run fails; per-beat flags are recorded for the operator (and, later, retries).
+run fails. Per-beat flags are {"issue", "retry"}: `retry` flags send the beat
+back for new footage once; the rest are reported only.
 """
 
 from __future__ import annotations
@@ -52,7 +53,7 @@ def _beat_at(beats: list[dict], t: float) -> str:
 
 def check(video: Path, fmt: dict, beats: list[dict], words: list, narration_s: float, expected_s: float) -> dict:
     failures: list[str] = []
-    flags: dict[str, list[str]] = {b["id"]: [] for b in beats}
+    flags: dict[str, list[dict]] = {b["id"]: [] for b in beats}
     meta = media.probe(video)
     v = next((s for s in meta["streams"] if s["codec_type"] == "video"), None)
     a = next((s for s in meta["streams"] if s["codec_type"] == "audio"), None)
@@ -93,9 +94,9 @@ def check(video: Path, fmt: dict, beats: list[dict], words: list, narration_s: f
                              "-vf", "blackdetect=d=0.3:pix_th=0.10,freezedetect=n=0.003:d=0.6",
                              "-f", "null", "-"])
     for start, end in BLACK.findall(picture_log):
-        flags[_beat_at(beats, float(start))].append(f"black frames {float(start):.1f}-{float(end):.1f}s")
+        flags[_beat_at(beats, float(start))].append({"issue": f"black frames {float(start):.1f}-{float(end):.1f}s", "retry": True})
     for start in FREEZE.findall(picture_log):
-        flags[_beat_at(beats, float(start))].append(f"frozen picture from {float(start):.1f}s")
+        flags[_beat_at(beats, float(start))].append({"issue": f"frozen picture from {float(start):.1f}s", "retry": True})
 
     word_starts = [w.start for w in words]
     fps_out = fmt["fps"]
@@ -106,7 +107,7 @@ def check(video: Path, fmt: dict, beats: list[dict], words: list, narration_s: f
             failures.append(f"cut at {cut:.2f}s ({b['id']}) is {nearest * 1000:.0f} ms from any word start")
     for b in beats:
         if b["duration"] > LONG_SHOT_S:
-            flags[b["id"]].append(f"long shot ({b['duration']:.1f}s)")
+            flags[b["id"]].append({"issue": f"long shot ({b['duration']:.1f}s)", "retry": False})
 
     return {
         "global_ok": not failures,

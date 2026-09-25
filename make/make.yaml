@@ -24,8 +24,9 @@ nodes:
         length_min: { type: number }
         length_max: { type: number }
         moods: { type: array, items: { type: string } }
+        playbook_version: { type: integer }
         context: { type: string }
-      required: [kind, format, config_digest, length_min, length_max, moods, context]
+      required: [kind, format, config_digest, length_min, length_max, moods, playbook_version, context]
 
   # ── Hooks: five openings, a pairwise tournament, the best three ──────────
   - id: hooks
@@ -265,16 +266,17 @@ nodes:
       as: beat
       max_parallel: 3
 
-  # ── Render, measure, store ───────────────────────────────────────────────
+  # ── Render, measure, review, retry once, store ────────────────────────────
   - id: render
     script: render
     runtime: uv
+    deps: ["pillow>=10"]
     timeout: 900000
     depends_on: [footage, words]
     with:
       footage: $footage.output
       overlay: $pick.output.overlay
-    output_format:
+    output_format: &render_result
       type: object
       properties:
         video: { type: string }
@@ -283,16 +285,17 @@ nodes:
         music_track: { type: [string, "null"] }
         mood: { type: [string, "null"] }
         loudness_before: { type: object }
-      required: [video, srt, duration, music_track, mood, loudness_before]
+        sheets: { type: array, items: { type: string } }
+        retried: { type: array, items: { type: string } }
+      required: [video, srt, duration, music_track, mood, loudness_before, sheets, retried]
 
   - id: qc
     script: qc
     runtime: uv
+    deps: ["pillow>=10"]
     timeout: 300000
     depends_on: [render]
-    with:
-      footage: $footage.output
-    output_format:
+    output_format: &qc_result
       type: object
       properties:
         passed: { type: boolean }
@@ -300,15 +303,85 @@ nodes:
         measurements: { type: object }
       required: [passed, flagged_beats, measurements]
 
+  # Vision: must open the review sheets, so it pins Claude and no tier.
+  - id: qc-review
+    command: qc-review
+    provider: claude
+    depends_on: [qc]
+    output_format:
+      type: object
+      properties:
+        beats:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              ok: { type: boolean }
+              problem: { type: string }
+              fix: { type: string }
+            required: [id, ok, problem, fix]
+        summary: { type: string }
+      required: [beats, summary]
+
+  - id: retry-list
+    script: retry-list
+    runtime: uv
+    timeout: 30000
+    depends_on: [qc-review]
+    with:
+      review: $qc-review.output
+    output_format:
+      type: object
+      properties:
+        needs_retry: { type: boolean }
+        beats: { type: array, items: { type: object } }
+        summary: { type: string }
+      required: [needs_retry, beats, summary]
+
+  # One retry per flagged beat. An empty list completes at once as [].
+  - id: refootage
+    include: video-beat
+    depends_on: [retry-list]
+    with:
+      context: $preflight.output.context
+    fan_out:
+      items: "$retry-list.output.beats"
+      as: beat
+      max_parallel: 3
+
+  - id: rerender
+    script: render
+    runtime: uv
+    deps: ["pillow>=10"]
+    timeout: 900000
+    depends_on: [refootage]
+    when: "$retry-list.output.needs_retry == 'true'"
+    with:
+      footage: $footage.output
+      refootage: $refootage.output
+      overlay: $pick.output.overlay
+    output_format: *render_result
+
+  # Measures the retried cut and records it; there is no second retry.
+  - id: requc
+    script: qc
+    runtime: uv
+    deps: ["pillow>=10"]
+    timeout: 300000
+    depends_on: [rerender]
+    output_format: *qc_result
+
   - id: store
     script: store
     runtime: uv
     timeout: 120000
-    depends_on: [qc, copy]
+    depends_on: [retry-list, requc, copy]
+    trigger_rule: none_failed_min_one_success
     with:
       pick: $pick.output
+      pick_comment: $pick-gate.output
       copy: $copy.output
-      footage: $footage.output
     output_format:
       type: object
       properties:
@@ -316,5 +389,7 @@ nodes:
         video: { type: string }
         latest: { type: string }
         qc_passed: { type: boolean }
+        playbook_version: { type: integer }
+        retried: { type: array, items: { type: string } }
         flagged_beats: { type: object }
-      required: [path, video, latest, qc_passed, flagged_beats]
+      required: [path, video, latest, qc_passed, playbook_version, retried, flagged_beats]

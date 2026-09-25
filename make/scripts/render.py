@@ -1,8 +1,10 @@
 """Cut, caption, mix and encode the video.
 
 Reads  : config.json, edl.json, words.json, narration.wav, the bound `footage`
-         aggregate and the picked script's `overlay`
-Writes : video.mp4, captions.ass, captions.srt, render.json, segments/
+         aggregate, the optional `refootage` aggregate (the retry pass) and the
+         picked script's `overlay`
+Writes : video.mp4, captions.ass, captions.srt, footage.json, render.json,
+         segments/, strips/ (per-beat frames and review sheets)
 """
 
 import json
@@ -11,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".shared"))
 
-from vidlib import captions, render
+from vidlib import captions, render, strips
 from vidlib import words as wordsmod
 from vidlib.config import load_resolved
 from vidlib.node import artifacts_dir, emit, json_input, log, state_dir, text_input
@@ -31,6 +33,10 @@ failed = [
 ]
 if failed:
     raise SystemExit("footage failed for some beats, so the video cannot be cut:\n- " + "\n- ".join(failed))
+# Retry pass: a beat whose retry succeeded uses the new clip; a failed retry keeps the old one.
+retried = {r["id"]: r for r in json_input("refootage") if isinstance(r, dict) and not r.get("archon_failed")} if text_input("refootage", "") else {}
+footage = [retried.get(r["id"], r) | {"retried": r["id"] in retried} for r in footage]
+(out / "footage.json").write_text(json.dumps(footage, indent=1))
 clips = {r["id"]: Path(r["clip"]) for r in footage}
 missing = [b["id"] for b in beats if b["id"] not in clips]
 if missing:
@@ -68,12 +74,17 @@ video = out / "video.mp4"
 render.final(picture, audio, ass, Path(font_file).parent if font_file else None, fmt["fps"], total, video)
 picture.unlink()
 
+frames = strips.extract(video, beats, out / "strips")
+sheets = strips.sheets(frames, out / "strips")
+
 info = {
     "video": str(video),
     "srt": str(out / "captions.srt"),
     "duration": round(total, 3),
     "music_track": str(music) if music else None,
     "mood": edl.get("mood"),
+    "sheets": [str(p) for p in sheets],
+    "retried": sorted(retried),
     "loudness_before": {k: loudness[k] for k in ("input_i", "input_tp", "input_lra")},
 }
 (out / "render.json").write_text(json.dumps(info, indent=1))

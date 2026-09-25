@@ -7,7 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
+
+from ..fonts import label_font
 
 FRAME_H = 300
 COLUMNS = 3
@@ -19,15 +21,6 @@ def _fetch(url: str) -> Image.Image:
     r = requests.get(url, timeout=30)
     r.raise_for_status()
     return Image.open(io.BytesIO(r.content)).convert("RGB")
-
-
-def _font(size: int) -> ImageFont.ImageFont:
-    for name in ("Arial Bold.ttf", "Arial.ttf", "DejaVuSans-Bold.ttf"):
-        try:
-            return ImageFont.truetype(name, size)
-        except OSError:
-            continue
-    return ImageFont.load_default()
 
 
 def build(candidates: list[dict], dest: Path, out_width: int, out_height: int) -> Path:
@@ -43,7 +36,7 @@ def build(candidates: list[dict], dest: Path, out_width: int, out_height: int) -
     rows = (len(candidates) + COLUMNS - 1) // COLUMNS
     sheet = Image.new("RGB", (COLUMNS * cell_w + PAD, rows * (cell_h + PAD) + PAD), (24, 24, 24))
     draw = ImageDraw.Draw(sheet)
-    font = _font(36)
+    font = label_font(36)
     for n, (c, imgs) in enumerate(zip(candidates, frames)):
         x0 = PAD + (n % COLUMNS) * cell_w
         y0 = PAD + (n // COLUMNS) * (cell_h + PAD)

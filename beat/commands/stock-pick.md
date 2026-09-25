@@ -10,6 +10,8 @@ This is search round $INPUTS.round. It found $INPUTS.count candidates. Open the 
 
 $INPUTS.sheet
 
+If the beat has a `fix_note`, a reviewer rejected the shot used before; that note says what was wrong, so choose something that fixes it.
+
 Each numbered cell shows one candidate's first, middle and last frame, already centre-cropped to the video's frame, with the clip length.
 
 Choose the candidate whose subject is the thing being said, that a viewer would not recognise as generic stock, and that survives the crop: nothing important cut off, no burned-in text, logos or watermarks, no face cut in half. Prefer footage whose light and colour sit well next to the neighbouring shots and that fits the brand's look.

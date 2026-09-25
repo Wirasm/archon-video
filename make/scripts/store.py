@@ -20,8 +20,9 @@ out = artifacts_dir()
 cfg = load_resolved(out)
 pick = json_input("pick")
 copy = json_input("copy")
-footage = json_input("footage")
+footage = json.loads((out / "footage.json").read_text())
 qc = json.loads((out / "qc.json").read_text())
+qc_review = json.loads((out / "qc-review.json").read_text())
 rendered = json.loads((out / "render.json").read_text())
 words = json.loads((out / "words.json").read_text())
 
@@ -34,8 +35,12 @@ if staging.exists():
     shutil.rmtree(staging)
 staging.mkdir()
 
-for name in ("video.mp4", "captions.srt", "edl.json", "qc.json", "words.json", "narration.wav", "config.json"):
-    shutil.copy2(out / name, staging / name)
+for name in ("video.mp4", "captions.srt", "edl.json", "qc.json", "qc-first.json", "qc-review.json", "footage.json",
+             "words.json", "narration.wav", "config.json"):
+    if (out / name).exists():
+        shutil.copy2(out / name, staging / name)
+# Per-beat frames and review sheets of the final cut: what `review` looks at.
+shutil.copytree(out / "strips", staging / "strips")
 (staging / "copy.json").write_text(json.dumps(copy, indent=1))
 (staging / "script.json").write_text(json.dumps(pick, indent=1))
 manifest = {
@@ -46,11 +51,18 @@ manifest = {
     "format": cfg["format"]["name"],
     "config_file": cfg["config_file"],
     "config_digest": cfg["config_digest"],
+    "playbook_version": cfg["playbook_version"],
+    "pick_comment": text_input("pick_comment", ""),
     "voice": {"provider": words["provider"], "model": words["model"], "voice_id": cfg["voice"]["voice_id"], "timings": words["source"]},
     "music": {"track": rendered["music_track"], "mood": rendered["mood"]},
     "duration": rendered["duration"],
-    "footage": [{"beat": r["id"], "source": r["source"], **r["provenance"]} for r in footage],
-    "qc": {"passed": qc["global_ok"], "flagged_beats": {k: v for k, v in qc["beats"].items() if v}},
+    "footage": [{"beat": r["id"], "source": r["source"], "retried": r.get("retried", False), **r["provenance"]} for r in footage],
+    "retried": rendered["retried"],
+    "qc": {
+        "passed": qc["global_ok"],
+        "flagged_beats": {k: [f["issue"] for f in v] for k, v in qc["beats"].items() if v},
+        "vision_summary": qc_review["summary"],
+    },
 }
 (staging / "manifest.json").write_text(json.dumps(manifest, indent=1))
 if dest.exists():
@@ -68,10 +80,12 @@ with (state_dir() / "library.jsonl").open("a") as fh:
     fh.write(json.dumps({
         "run_id": rid, "created_at": manifest["created_at"], "kind": cfg["kind"], "topic": manifest["topic"],
         "title": pick["title"], "hook": pick["narration"].split(".")[0], "path": str(dest),
-        "config_digest": cfg["config_digest"], "music_track": rendered["music_track"],
+        "config_digest": cfg["config_digest"], "playbook_version": cfg["playbook_version"],
+        "music_track": rendered["music_track"], "frame_hashes": list(qc["frame_hashes"].values()),
         "footage": [f"{r['provenance'].get('provider')}:{r['provenance'].get('id')}" for r in footage],
         "qc_passed": qc["global_ok"],
     }) + "\n")
 
 emit({"path": str(dest), "video": str(dest / "video.mp4"), "latest": str(latest), "qc_passed": qc["global_ok"],
+      "playbook_version": cfg["playbook_version"], "retried": rendered["retried"],
       "flagged_beats": manifest["qc"]["flagged_beats"]})
