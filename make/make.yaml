@@ -172,7 +172,7 @@ nodes:
   - id: voice
     script: voice
     runtime: uv
-    deps: ["requests>=2.31"]
+    deps: ["requests>=2.31", "kokoro-onnx>=0.4", "soundfile>=0.12"]
     timeout: 600000
     depends_on: [pick]
     with:
@@ -180,19 +180,46 @@ nodes:
     output_format:
       type: object
       properties:
-        audio: { type: string }
-        words_file: { type: string }
+        provider: { type: string }
+        duration: { type: number }
+        needs_alignment: { type: boolean }
+      required: [provider, duration, needs_alignment]
+
+  # Only for providers without word timings (or voice.timings: align). torch is
+  # large, so it installs only when this node runs.
+  - id: align
+    script: align
+    runtime: uv
+    deps: ["torch>=2.4", "torchaudio>=2.4", "soundfile>=0.12"]
+    timeout: 900000
+    depends_on: [voice]
+    when: "$voice.output.needs_alignment == 'true'"
+    output_format:
+      type: object
+      properties:
+        words: { type: integer }
+      required: [words]
+
+  - id: words
+    script: words
+    runtime: uv
+    timeout: 30000
+    depends_on: [voice, align]
+    trigger_rule: none_failed_min_one_success
+    output_format:
+      type: object
+      properties:
         duration: { type: number }
         provider: { type: string }
         timings: { type: string }
         word_count: { type: integer }
         indexed: { type: string }
-      required: [audio, words_file, duration, provider, timings, word_count, indexed]
+      required: [duration, provider, timings, word_count, indexed]
 
   - id: beats
     command: beats
     model: large
-    depends_on: [voice]
+    depends_on: [words]
     output_format:
       type: object
       properties:
@@ -243,7 +270,7 @@ nodes:
     script: render
     runtime: uv
     timeout: 900000
-    depends_on: [footage, voice]
+    depends_on: [footage, words]
     with:
       footage: $footage.output
       overlay: $pick.output.overlay

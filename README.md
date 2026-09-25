@@ -8,7 +8,7 @@ It does not publish anything.
 
 ## Status
 
-Early. This version makes one kind of video (`social`) from stock footage only, in the 9:16 formats. Product, marketing and UGC kinds, other voice providers, motion-graphics beats, AI video, the vision QC retry loop and the review playbook come in later versions. Config values for those exist so your file does not change shape, but they fail at preflight with "not supported yet".
+Early. This version makes one kind of video (`social`) from stock footage only, in the 9:16 formats, with any of four voices. Product, marketing and UGC kinds, motion-graphics beats, AI video, the vision QC retry loop and the review playbook come in later versions. Config values for those exist so your file does not change shape, but they fail at preflight with "not supported yet".
 
 ## Requirements
 
@@ -31,11 +31,13 @@ Update with `archon plugin update Wirasm/archon-video`. To change the pack for o
 Keys go in Archon's env file, `~/.archon/.env` (or `$ARCHON_HOME/.env`), never in the config:
 
 ```bash
-CARTESIA_API_KEY=...   # narration with word timings. Commercial use needs Cartesia's Pro plan or above.
-PEXELS_API_KEY=...     # stock footage. Free: https://www.pexels.com/api/
+PEXELS_API_KEY=...       # stock footage. Free: https://www.pexels.com/api/
+CARTESIA_API_KEY=...     # voice.provider: cartesia (default). Commercial use needs Cartesia's Pro plan or above.
+ELEVENLABS_API_KEY=...   # voice.provider: elevenlabs. Commercial use needs a paid plan.
+DEEPGRAM_API_KEY=...     # voice.provider: deepgram
 ```
 
-Preflight checks that the keys your config needs are set and fails before any spend if one is missing.
+Only the keys for the providers your config names are needed; `kokoro` needs none. Preflight checks that they are set and fails before any spend if one is missing.
 
 ## Config
 
@@ -43,7 +45,7 @@ Copy [`video.config.example.yaml`](video.config.example.yaml) to your project as
 
 - **`brand.tokens`** is the main creative lever. Colours, fonts, caption style, the look you want from footage: every agent that writes copy or picks visuals receives the whole block. Add any keys you like. The renderer reads `colors.text`, `colors.accent`, `colors.outline`, `fonts.captions` (a `family`, and optionally a font `file`) and `captions.uppercase`.
 - **`format`** is a named output format: `shorts`, `reels` or `tiktok` (all 1080x1920, 9:16). Each format sets the resolution, the caption safe zone and the longest allowed duration. `youtube` (16:9) and `square` (1:1) are known but not supported yet.
-- **`voice`** picks the voice. Cartesia is the default and the only provider in this version.
+- **`voice`** picks the voice: `cartesia` (default), `elevenlabs`, `deepgram`, or `kokoro` (Kokoro-82M, free, runs locally; its 350 MB model downloads once to `~/.cache/archon-video/`). Cartesia and ElevenLabs return word timings with the audio. For Deepgram and Kokoro, or any provider with `timings: align`, a local forced aligner (wav2vec2 through torchaudio) times the script against the narration; the first aligned run installs torch, about 1 GB. Every provider ends in the same `words.json`, so captions and cuts never depend on which voice you use.
 - **`music.dir`** is optional: a folder of mood folders (`music/calm/*.mp3`, `music/upbeat/*.mp3`). The beat planner picks a mood; the renderer picks the least recently used track in it and ducks it under the voice.
 - **`output.dir`** is where finished videos land. By default they go to Archon's state folder for the project, `~/.archon/workspaces/<owner>/<project>/state/video/videos/<run-id>/`, with a `latest` link to the newest one.
 
@@ -72,7 +74,7 @@ A stock-only video costs about $0.02-0.05 of Cartesia credit, and Pexels is free
 ## Develop
 
 ```bash
-uv run --with pytest --with pyyaml pytest tests -q
+uv run --with pytest --with pyyaml --with requests pytest tests -q
 ```
 
 ## Licence

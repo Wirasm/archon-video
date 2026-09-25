@@ -4,9 +4,9 @@ $preflight.output.context
 
 The narration, as spoken. Each word has an index in brackets and its start time in seconds after the @:
 
-$voice.output.indexed
+$words.output.indexed
 
-Total narration length: $voice.output.duration seconds.
+Total narration length: $words.output.duration seconds.
 
 A beat starts at a word and lasts until the next beat starts; you choose where cuts happen by choosing start words (`start_word` is a word index).
 
