@@ -1,12 +1,11 @@
 name: video-make
-description: "Topic -> edited vertical short. Pick one of three scripts at a gate; everything else is automatic."
+description: "Brief -> a short video edited by agents. Pick one of three scripts at a gate; a director, a footage scout and an editor make everything else, and the editor's HyperFrames composition is rendered exactly as written."
 interactive: true
 # Reads video.config.yaml from the project and writes nothing into the checkout.
 worktree:
   enabled: false
 inputs:
-  topic: { required: true, description: "What the video is about" }
-  kind: { default: social, description: "social (product, marketing and ugc come later)" }
+  brief: { required: true, description: "What the video is, in your words: topic, audience, style, anything that matters" }
   config: { default: video.config.yaml, description: "Config path, relative to the project" }
 
 nodes:
@@ -18,18 +17,17 @@ nodes:
     output_format:
       type: object
       properties:
-        kind: { type: string }
         format: { type: string }
         config_digest: { type: string }
         length_min: { type: number }
         length_max: { type: number }
-        moods: { type: array, items: { type: string } }
         playbook_version: { type: integer }
         context: { type: string }
         recent_openings: { type: string }
-      required: [kind, format, config_digest, length_min, length_max, moods, playbook_version, context, recent_openings]
+        hyperframes: { type: string }
+        music: { type: string }
+      required: [format, config_digest, length_min, length_max, playbook_version, context, recent_openings, hyperframes, music]
 
-  # ── Hooks: five openings, a pairwise tournament, the best three ──────────
   # Text-only agents get no tools: with a shell, the copy writer once searched
   # the filesystem for "the finished video" instead of reading its prompt.
   - id: hooks
@@ -176,7 +174,7 @@ nodes:
         alt_text: { type: string }
       required: [youtube_title, youtube_description, youtube_tags, tiktok_caption, instagram_caption, hashtags, alt_text]
 
-  # ── Voice, beat plan, cut list ───────────────────────────────────────────
+  # ── Voice and word timings ───────────────────────────────────────────────
   - id: voice
     script: voice
     runtime: uv
@@ -224,173 +222,112 @@ nodes:
         indexed: { type: string }
       required: [duration, provider, timings, word_count, indexed]
 
-  - id: beats
-    command: beats
-    allowed_tools: []
+  # ── Direction, footage, edit ─────────────────────────────────────────────
+  - id: director
+    command: director
     model: large
+    allowed_tools: []
     depends_on: [words]
     output_format:
       type: object
       properties:
-        mood: { type: string }
-        beats:
-          type: array
-          items:
-            type: object
-            properties:
-              start_word: { type: integer }
-              source: { type: string, enum: [stock] }
-              visual: { type: string }
-              queries: { type: array, items: { type: string } }
-              emphasis_word: { type: [integer, "null"] }
-              overlay: { type: string }
-            required: [start_word, source, visual, queries, emphasis_word, overlay]
-      required: [mood, beats]
-
-  - id: edl
-    script: edl
-    runtime: uv
-    timeout: 30000
-    depends_on: [beats]
-    with:
-      plan: $beats.output
-    output_format:
-      type: object
-      properties:
-        beats: { type: array, items: { type: object } }
-        mood: { type: [string, "null"] }
-        total: { type: number }
-        table: { type: string }
-      required: [beats, mood, total, table]
-
-  # ── Footage: one block instance per beat, inside this run ────────────────
-  - id: footage
-    include: video-beat
-    depends_on: [edl]
-    with:
-      context: $preflight.output.context
-    fan_out:
-      items: "$edl.output.beats"
-      as: beat
-      max_parallel: 3
-
-  # ── Render, measure, review, retry once, store ────────────────────────────
-  - id: render
-    script: render
-    runtime: uv
-    deps: ["pillow>=10"]
-    timeout: 900000
-    depends_on: [footage, words]
-    with:
-      footage: $footage.output
-      overlay: $pick.output.overlay
-    output_format: &render_result
-      type: object
-      properties:
-        video: { type: string }
-        srt: { type: string }
-        duration: { type: number }
-        music_track: { type: [string, "null"] }
-        mood: { type: [string, "null"] }
-        loudness_before: { type: object }
-        sheets: { type: array, items: { type: string } }
-        retried: { type: array, items: { type: string } }
-      required: [video, srt, duration, music_track, mood, loudness_before, sheets, retried]
-
-  - id: qc
-    script: qc
-    runtime: uv
-    deps: ["pillow>=10"]
-    timeout: 300000
-    depends_on: [render]
-    output_format: &qc_result
-      type: object
-      properties:
-        passed: { type: boolean }
-        flagged_beats: { type: object }
-        measurements: { type: object }
-      required: [passed, flagged_beats, measurements]
-
-  # Vision: must open the review sheets, so it pins Claude and no tier.
-  - id: qc-review
-    command: qc-review
-    allowed_tools: [Read]
-    provider: claude
-    depends_on: [qc]
-    output_format:
-      type: object
-      properties:
-        beats:
+        treatment: { type: string }
+        needs:
           type: array
           items:
             type: object
             properties:
               id: { type: string }
-              ok: { type: boolean }
-              problem: { type: string }
-              fix: { type: string }
-            required: [id, ok, problem, fix]
-        summary: { type: string }
-      required: [beats, summary]
+              shows: { type: string }
+              why: { type: string }
+              queries: { type: array, items: { type: string } }
+              min_seconds: { type: number }
+            required: [id, shows, why, queries, min_seconds]
+      required: [treatment, needs]
 
-  - id: retry-list
-    script: retry-list
-    runtime: uv
-    timeout: 30000
-    depends_on: [qc-review]
-    with:
-      review: $qc-review.output
-    output_format:
-      type: object
-      properties:
-        needs_retry: { type: boolean }
-        beats: { type: array, items: { type: object } }
-        summary: { type: string }
-      required: [needs_retry, beats, summary]
-
-  # One retry per flagged beat. An empty list completes at once as [].
-  - id: refootage
-    include: video-beat
-    depends_on: [retry-list]
+  # One scout per footage need, inside this run.
+  - id: scout
+    include: video-scout
+    depends_on: [director]
     with:
       context: $preflight.output.context
     fan_out:
-      items: "$retry-list.output.beats"
-      as: beat
+      items: "$director.output.needs"
+      as: need
       max_parallel: 3
 
-  - id: rerender
-    script: render
+  - id: assemble
+    script: assemble
     runtime: uv
     deps: ["pillow>=10"]
-    timeout: 900000
-    depends_on: [refootage]
-    when: "$retry-list.output.needs_retry == 'true'"
+    timeout: 600000
+    depends_on: [scout]
     with:
-      footage: $footage.output
-      refootage: $refootage.output
-      overlay: $pick.output.overlay
-    output_format: *render_result
+      director: $director.output
+      footage: $scout.output
+    output_format:
+      type: object
+      properties:
+        sheets: { type: array, items: { type: string } }
+        assets: { type: string }
+        failed: { type: array, items: { type: string } }
+      required: [sheets, assets, failed]
 
-  # Measures the retried cut and records it; there is no second retry.
-  - id: requc
+  # The editor writes the whole edit as a HyperFrames composition and checks it
+  # with the CLI; it needs a shell, files and image reading, nothing else.
+  - id: editor
+    command: editor
+    model: large
+    allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
+    depends_on: [assemble]
+    output_format:
+      type: object
+      properties:
+        duration: { type: number }
+        summary: { type: string }
+      required: [duration, summary]
+
+  # ── Render, measure, store ───────────────────────────────────────────────
+  - id: render
+    script: render
+    runtime: uv
+    timeout: 7800000
+    depends_on: [editor]
+    output_format:
+      type: object
+      properties:
+        video: { type: string }
+        srt: { type: [string, "null"] }
+        duration: { type: number }
+        render_seconds: { type: number }
+        render_summary: { type: string }
+        loudness_before: { type: object }
+      required: [video, srt, duration, render_seconds, render_summary, loudness_before]
+
+  - id: qc
     script: qc
     runtime: uv
     deps: ["pillow>=10"]
-    timeout: 300000
-    depends_on: [rerender]
-    output_format: *qc_result
+    timeout: 600000
+    depends_on: [render]
+    output_format:
+      type: object
+      properties:
+        passed: { type: boolean }
+        flags: { type: array, items: { type: string } }
+        measurements: { type: object }
+      required: [passed, flags, measurements]
 
   - id: store
     script: store
     runtime: uv
-    timeout: 120000
-    depends_on: [retry-list, requc, copy]
-    trigger_rule: none_failed_min_one_success
+    timeout: 300000
+    depends_on: [qc, copy]
     with:
       pick: $pick.output
       pick_comment: $pick-gate.output
       copy: $copy.output
+      editor: $editor.output
     output_format:
       type: object
       properties:
@@ -399,6 +336,5 @@ nodes:
         latest: { type: string }
         qc_passed: { type: boolean }
         playbook_version: { type: integer }
-        retried: { type: array, items: { type: string } }
-        flagged_beats: { type: object }
-      required: [path, video, latest, qc_passed, playbook_version, retried, flagged_beats]
+        flags: { type: array, items: { type: string } }
+      required: [path, video, latest, qc_passed, playbook_version, flags]

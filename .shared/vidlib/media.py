@@ -10,6 +10,12 @@ LOUDNESS = {"I": -14.0, "TP": -1.0, "LRA": 11.0}
 # Normalise with extra true-peak headroom: the AAC encode after loudnorm raises
 # peaks by a few tenths of a dB, and QC checks the encoded file against TP.
 TP_HEADROOM = 0.5
+# Delivery encode for every format: H.264 High, yuv420p, AAC 48 kHz, moov first.
+ENCODE = [
+    "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "17",
+    "-maxrate", "12M", "-bufsize", "24M", "-g", "60", "-bf", "2",
+    "-c:a", "aac", "-ar", "48000", "-b:a", "192k", "-movflags", "+faststart",
+]
 
 
 def run(args: list[str], cwd: Path | None = None) -> str:

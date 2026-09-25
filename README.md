@@ -1,21 +1,24 @@
 # archon-video
 
-An [Archon](https://github.com/coleam00/Archon) workflow pack that turns a topic into an edited vertical short.
+An [Archon](https://github.com/coleam00/Archon) workflow pack in which agents write, direct and edit a short video from your brief.
 
-You give it a topic. It writes five openings and has a judge compare them in pairs, writes three full scripts from the best three, and stops so you can pick one. After that it runs on its own: narration with word timings, a beat plan anchored to those words, stock footage that an agent picks by looking at contact sheets, an ffmpeg render with brand-styled captions and loudness-normalised audio, measured and vision QC with one retry for bad beats, and a stored bundle with the post copy. A separate `review` run turns a critique you approve into a numbered house rule that every later video follows.
+You describe the video in your own words: the topic, who it is for, how it should feel. The pack writes five openings, has a judge compare them in pairs, writes three full scripts from the best three, and stops so you can pick one. Then a small team of agents makes the video. A director writes the treatment: structure, rhythm, look, text on screen, motion, sound. Footage scouts search stock libraries and pick shots by looking at contact sheets. An editor builds the whole edit as a [HyperFrames](https://github.com/heygen-com/hyperframes) composition and checks it with snapshots. The composition is rendered exactly as written; code only masters loudness to the format's target, measures the result and stores it.
+
+No edit decision is made in code. A calm explainer and a hype teaser come out edited differently because the brief is different.
 
 It does not publish anything.
 
 ## Status
 
-Early. This version makes one kind of video (`social`) from stock footage only, in the 9:16 formats, with any of four voices. Product, marketing and UGC kinds, motion-graphics beats and AI video come in later versions. Config values for those exist so your file does not change shape, but they fail at preflight with "not supported yet".
+Early. Footage comes from Pexels stock, in the 9:16 formats, with any of four voices. Planned next: a critic that watches rough cuts and sends notes back to the editor, a rough-cut gate, motion-design and sound specialists working in parallel, your own footage and reference videos as inputs, and AI video.
 
 ## Requirements
 
 - Archon with workflow-pack support (`archon plugin install` for workflow packs).
-- `ffmpeg` and `ffprobe`, built with libass (Homebrew's `ffmpeg` is).
+- `ffmpeg` and `ffprobe`.
+- Node 22 or newer (`npx` runs the pinned HyperFrames CLI, which downloads its own Chrome on first use).
 - [`uv`](https://docs.astral.sh/uv/). Script nodes run on it and install their own Python packages.
-- An Archon agent provider. The vision nodes (picking footage from contact sheets) pin `provider: claude` because they must open images.
+- An Archon agent provider. The footage picker pins `provider: claude` because it must open images; the director and editor use the `large` tier.
 
 ## Install
 
@@ -41,20 +44,21 @@ Only the keys for the providers your config names are needed; `kokoro` needs non
 
 ## Config
 
-Copy [`video.config.example.yaml`](video.config.example.yaml) to your project as `video.config.yaml` and edit it. The parts that matter most:
+Copy [`video.config.example.yaml`](video.config.example.yaml) to your project as `video.config.yaml`. It holds design tokens and sources only, never editing choices:
 
-- **`brand.tokens`** is the main creative lever. Colours, fonts, caption style, the look you want from footage: every agent that writes copy or picks visuals receives the whole block. Add any keys you like. The renderer reads `colors.text`, `colors.accent`, `colors.outline`, `fonts.captions` (a `family`, and optionally a font `file`) and `captions.uppercase`.
-- **`format`** is a named output format: `shorts`, `reels` or `tiktok` (all 1080x1920, 9:16). Each format sets the resolution, the caption safe zone and the longest allowed duration. `youtube` (16:9) and `square` (1:1) are known but not supported yet.
-- **`voice`** picks the voice: `cartesia` (default), `elevenlabs`, `deepgram`, or `kokoro` (Kokoro-82M, free, runs locally; its 350 MB model downloads once to `~/.cache/archon-video/`). Cartesia and ElevenLabs return word timings with the audio. For Deepgram and Kokoro, or any provider with `timings: align`, a local forced aligner (wav2vec2 through torchaudio) times the script against the narration; the first aligned run installs torch, about 1 GB. Every provider ends in the same `words.json`, so captions and cuts never depend on which voice you use.
-- **`music.dir`** is optional: a folder of mood folders (`music/calm/*.mp3`, `music/upbeat/*.mp3`). The beat planner picks a mood; the renderer picks the least recently used track in it and ducks it under the voice.
-- **`output.dir`** is where finished videos land. By default they go to Archon's state folder for the project, `~/.archon/workspaces/<owner>/<project>/state/video/videos/<run-id>/`, with a `latest` link to the newest one.
+- **`brand`**: name, colours, fonts (give a font `file` to use it in the video), logo, look, voice and tone, audience, `constraints` (plain-language musts and must-nots) and optional `facts`. Every agent receives the whole block as guidance to interpret, not a template.
+- **`voice`**: `cartesia` (default), `elevenlabs`, `deepgram`, or `kokoro` (Kokoro-82M, free, runs locally; its 350 MB model downloads once to `~/.cache/archon-video/`). Cartesia and ElevenLabs return word timings with the audio. For Deepgram and Kokoro, or any provider with `timings: align`, a local forced aligner (wav2vec2 through torchaudio) times the script against the narration; the first aligned run installs torch, about 1 GB.
+- **`format`**: a named output format, `shorts`, `reels` or `tiktok` (all 1080x1920, 9:16), with its resolution, safe zone and longest allowed duration. `youtube` (16:9) and `square` (1:1) are known but not supported yet. `length_s` sets the narration length.
+- **`music.dir`**: an optional library of tracks. The director and editor choose by file name and length, so name files and folders descriptively.
+- **`output.dir`**: where finished videos land. By default they go to Archon's state folder for the project, `~/.archon/workspaces/<owner>/<project>/state/video/videos/<run-id>/`, with a `latest` link to the newest one.
 
 Relative paths in the config resolve from the config file's folder.
 
 ## Make a video
 
 ```bash
-archon workflow run Wirasm/archon-video:make --input topic="Why cities feel lonelier than small towns"
+archon workflow run Wirasm/archon-video:make \
+  --input brief="A calm, patient explainer on why the sea is salty, for curious adults. Slow, unhurried, lots of water."
 ```
 
 The run stops at `pick-gate` and shows the three scripts with the judge's win table. Approve with a comment that says which one you want and any edits, in plain words:
@@ -65,11 +69,9 @@ archon workflow approve <run-id> "Script 2, but cut the last sentence"
 
 An empty comment takes the judge's top pick unchanged. Reject to cancel the run.
 
-Each stored video folder holds `video.mp4`, `captions.srt`, `copy.json` (titles, captions and tags per platform), `script.json`, `edl.json` (the cut list), `qc.json`, `narration.wav`, `words.json`, the resolved `config.json` and `manifest.json` (config digest, voice provider and model, music track, and where every clip came from). QC flags that did not fail the run, such as the same stock clip used in two beats, are listed in `qc.json` and `manifest.json`.
+After that: narration and word timings, the director's treatment and footage needs, one scout per need, then the editor writes `edit/index.html` and checks it with `hyperframes lint`, `check` and `snapshot`. The render takes several minutes; a footage-heavy 45 s video takes about ten on an Apple Silicon Mac.
 
-### What happens after the render
-
-QC measures the cut (geometry, loudness, dead air, black or frozen frames, cut sync) and checks it for repeated shots: the same clip twice, two beats that look alike, or a shot that appeared in one of the last 20 videos. Stock clips used by those recent videos are left out of new searches. A vision check then looks at every beat's frames. Each beat it flags, and each beat QC flags for a repeat or a black or frozen picture, gets new footage once, with the reviewer's note guiding the new pick; the video is re-rendered and measured again. A beat that is still flagged ships with the flag recorded in `manifest.json`.
+Each stored video folder holds `video.mp4`, `captions.srt` (an accessibility sidecar that follows the narration), `copy.json` (titles, captions and tags per platform), `script.json`, the composition under `edit/`, the team's notes under `room/` (treatment, footage needs, scout picks and contact sheets), review sheets under `frames/`, `qc.json`, `narration.wav`, `words.json`, the resolved `config.json` and `manifest.json` (brief, config digest, voice, render time, editor's summary, and where every clip came from). QC fails the run only on format or loudness specs; silence, still frames and shots that look like a recent video's are recorded as flags.
 
 ## Review and the playbook
 
@@ -78,13 +80,13 @@ archon workflow run Wirasm/archon-video:review                      # newest vid
 archon workflow run Wirasm/archon-video:review --input video=<run-id>
 ```
 
-A reviewer agent looks at the stored video's frames, script, cut list and QC, gives a verdict, and proposes one change to the playbook: add a rule, revise or retire one by id, or nothing. The run stops at a gate. Approve (your comment is kept with the change) to append it to `playbook.jsonl` in the project's state folder; reject to leave the playbook as it is.
+A reviewer agent looks at the stored video's frames, brief, script, treatment and QC, gives a verdict, and proposes one change to the playbook: add a lesson, revise or retire one by id, or nothing. The run stops at a gate. Approve (your comment is kept with the change) to append it to `playbook.jsonl` in the project's state folder; reject to leave the playbook as it is.
 
-Rules are numbered (R1, R2, ...) and scoped to one kind or to all kinds. Every later `make` run puts the active rules in its prompts and records the playbook version it used in the video's manifest.
+Lessons are numbered (R1, R2, ...), each with its evidence. Every later `make` run gives the active lessons to its agents as evidence to weigh, not rules, and records the playbook version it used in the video's manifest.
 
 ## Cost
 
-A stock-only video costs about $0.02-0.05 of Cartesia credit, and Pexels is free. The agent calls run on your Archon provider: roughly 30 calls per video, a few of them with images.
+Pexels is free and Cartesia narration costs about $0.03 per video. The agent calls (about 40, several with images, and a long editor session) run on your Archon provider; on a Claude subscription they use quota rather than money.
 
 ## Develop
 

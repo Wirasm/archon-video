@@ -1,90 +1,65 @@
-"""Cut, caption, mix and encode the video.
+"""Render the editor's composition exactly as written, then master it.
 
-Reads  : config.json, edl.json, words.json, narration.wav, the bound `footage`
-         aggregate, the optional `refootage` aggregate (the retry pass) and the
-         picked script's `overlay`
-Writes : video.mp4, captions.ass, captions.srt, footage.json, render.json,
-         segments/, strips/ (per-beat frames and review sheets)
+HyperFrames renders edit/index.html. Mastering changes nothing the editor
+decided: the audio is normalised to the loudness target (-14 LUFS, -1 dBTP)
+and the picture re-encoded to the delivery spec. The SRT sidecar follows the
+narration's place on the composition's timeline.
 """
 
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".shared"))
 
-from vidlib import captions, render, strips
+from vidlib import captions, hyperframes, media
 from vidlib import words as wordsmod
 from vidlib.config import load_resolved
-from vidlib.node import artifacts_dir, emit, json_input, log, state_dir, text_input
+from vidlib.node import artifacts_dir, emit, log
 
 out = artifacts_dir()
 cfg = load_resolved(out)
-fmt = cfg["format"]
-edl = json.loads((out / "edl.json").read_text())
-beats = edl["beats"]
-words = wordsmod.read(out / "words.json")
+edit = out / "edit"
 
-footage = json_input("footage")
-failed = [
-    f"{beats[i]['id']}: {r.get('error', 'failed')}"
-    for i, r in enumerate(footage)
-    if not isinstance(r, dict) or r.get("archon_failed")
-]
-if failed:
-    raise SystemExit("footage failed for some beats, so the video cannot be cut:\n- " + "\n- ".join(failed))
-# Retry pass: a beat whose retry succeeded uses the new clip; a failed retry keeps the old one.
-retried = {r["id"]: r for r in json_input("refootage") if isinstance(r, dict) and not r.get("archon_failed")} if text_input("refootage", "") else {}
-footage = [retried.get(r["id"], r) | {"retried": r["id"] in retried} for r in footage]
-(out / "footage.json").write_text(json.dumps(footage, indent=1))
-clips = {r["id"]: Path(r["clip"]) for r in footage}
-missing = [b["id"] for b in beats if b["id"] not in clips]
-if missing:
-    raise SystemExit(f"no footage result for beats {missing}")
+proc = hyperframes.run(["timeline", "--json"], edit, timeout=300)
+if proc.returncode != 0:
+    raise SystemExit(f"hyperframes timeline failed:\n{proc.stderr[-2000:]}")
+timeline = json.loads(proc.stdout)["timeline"]
+narration = next((r for t in timeline["tracks"] for r in t["rows"] if (r.get("src") or "").endswith("narration.wav")), None)
 
-segments_dir = out / "segments"
-segments_dir.mkdir(exist_ok=True)
-spans = render.frame_spans(beats, fmt["fps"])
-segment_paths = []
-for beat, (_, frames) in zip(beats, spans):
-    dest = segments_dir / f"{beat['id']}.mp4"
-    render.render_segment(beat, clips[beat["id"]], frames, fmt, dest)
-    segment_paths.append(dest)
-    log(f"{beat['id']}: {frames} frames")
+started = time.monotonic()
+raw = edit / "render.mp4"
+proc = hyperframes.run(
+    ["render", "--quality", "delivery", "--fps", str(cfg["format"]["fps"]), "--output", str(raw)], edit, timeout=7200
+)
+render_s = time.monotonic() - started
+if proc.returncode != 0 or not raw.exists():
+    raise SystemExit(f"hyperframes render failed:\n{(proc.stdout + proc.stderr)[-3000:]}")
+summary = [line.strip() for line in proc.stdout.splitlines() if "rendered in" in line or "capture" in line][-2:]
+log("\n".join(summary))
 
-concat_list = segments_dir / "concat.txt"
-concat_list.write_text("".join(f"file '{p.name}'\n" for p in segment_paths))
-picture = out / "picture.mp4"
-render.media.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0",
-                  "-i", str(concat_list), "-c", "copy", str(picture)])
-
-total = sum(n for _, n in spans) / fmt["fps"]
-music = render.pick_music(cfg["music"]["dir"], edl.get("mood"), state_dir() / "library.jsonl")
-audio = out / "mix.wav"
-loudness = render.mix_audio(out / "narration.wav", total, music, cfg["music"]["duck"], out, audio)
-
-overlays = [(0.0, beats[0]["end"], text_input("overlay", ""))]
-overlays += [(b["start"], b["end"], b["overlay"]) for b in beats[1:] if b.get("overlay")]
-ass = out / "captions.ass"
-ass.write_text(captions.build_ass(words["words"], fmt, cfg["captions"], overlays))
-(out / "captions.srt").write_text(captions.build_srt(words["words"]))
-
-font_file = cfg["captions"]["font_file"]
+audio = out / "mix-raw.wav"
+media.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(raw), "-vn", "-ac", "2", str(audio)])
+mastered = out / "mix.wav"
+loudness = media.loudnorm_two_pass(audio, mastered)
+audio.unlink()
 video = out / "video.mp4"
-render.final(picture, audio, ass, Path(font_file).parent if font_file else None, fmt["fps"], total, video)
-picture.unlink()
+media.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(raw), "-i", str(mastered),
+           "-map", "0:v", "-map", "1:a", "-r", str(cfg["format"]["fps"]), *media.ENCODE, "-shortest", str(video)])
 
-frames = strips.extract(video, beats, out / "strips")
-sheets = strips.sheets(frames, out / "strips")
+srt = None
+if narration:
+    words = wordsmod.read(out / "words.json")
+    srt = out / "captions.srt"
+    srt.write_text(captions.build_srt(words["words"], offset=float(narration["absStart"])))
 
 info = {
     "video": str(video),
-    "srt": str(out / "captions.srt"),
-    "duration": round(total, 3),
-    "music_track": str(music) if music else None,
-    "mood": edl.get("mood"),
-    "sheets": [str(p) for p in sheets],
-    "retried": sorted(retried),
+    "srt": str(srt) if srt else None,
+    "duration": round(float(timeline["duration"]), 3),
+    "render_seconds": round(render_s, 1),
+    "render_summary": " | ".join(summary),
     "loudness_before": {k: loudness[k] for k in ("input_i", "input_tp", "input_lra")},
 }
 (out / "render.json").write_text(json.dumps(info, indent=1))

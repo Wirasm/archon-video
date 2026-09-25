@@ -1,7 +1,9 @@
-"""Store the finished video and record it in the project's library.
+"""Store the finished video with everything that made it, and record it.
 
 Default destination: $STATE_DIR/video/videos/<run-id>/ with a `latest` link.
-`output.dir` in the config replaces the videos/ folder.
+`output.dir` in the config replaces the videos/ folder. The bundle keeps the
+composition, the room notes and the review sheets, so a review, or a person,
+can see how the edit was made.
 """
 
 import json
@@ -20,11 +22,11 @@ out = artifacts_dir()
 cfg = load_resolved(out)
 pick = json_input("pick")
 copy = json_input("copy")
-footage = json.loads((out / "footage.json").read_text())
+editor = json_input("editor")
 qc = json.loads((out / "qc.json").read_text())
-qc_review = json.loads((out / "qc-review.json").read_text())
 rendered = json.loads((out / "render.json").read_text())
 words = json.loads((out / "words.json").read_text())
+footage = json.loads((out / "room" / "scout" / "footage.json").read_text())
 
 root = Path(cfg["output_dir"]) if cfg["output_dir"] else state_dir() / "videos"
 root.mkdir(parents=True, exist_ok=True)
@@ -35,34 +37,33 @@ if staging.exists():
     shutil.rmtree(staging)
 staging.mkdir()
 
-for name in ("video.mp4", "captions.srt", "edl.json", "qc.json", "qc-first.json", "qc-review.json", "footage.json",
-             "words.json", "narration.wav", "config.json"):
+for name in ("video.mp4", "captions.srt", "qc.json", "render.json", "words.json", "narration.wav", "config.json"):
     if (out / name).exists():
         shutil.copy2(out / name, staging / name)
-# Per-beat frames and review sheets of the final cut: what `review` looks at.
-shutil.copytree(out / "strips", staging / "strips")
 (staging / "copy.json").write_text(json.dumps(copy, indent=1))
 (staging / "script.json").write_text(json.dumps(pick, indent=1))
+# The edit itself, without the media it points at (that is in the run's artifacts).
+shutil.copytree(out / "edit", staging / "edit", ignore=shutil.ignore_patterns("assets", "*.mp4", "snapshots", "node_modules"))
+shutil.copytree(out / "room", staging / "room", ignore=shutil.ignore_patterns("*.mp4", "frames"))
+(staging / "frames").mkdir()
+for sheet in (out / "frames").glob("review-*.jpg"):
+    shutil.copy2(sheet, staging / "frames" / sheet.name)
+
 manifest = {
     "run_id": rid,
     "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-    "topic": text_input("topic"),
-    "kind": cfg["kind"],
+    "brief": cfg["brief"],
     "format": cfg["format"]["name"],
     "config_file": cfg["config_file"],
     "config_digest": cfg["config_digest"],
     "playbook_version": cfg["playbook_version"],
     "pick_comment": text_input("pick_comment", ""),
     "voice": {"provider": words["provider"], "model": words["model"], "voice_id": cfg["voice"]["voice_id"], "timings": words["source"]},
-    "music": {"track": rendered["music_track"], "mood": rendered["mood"]},
     "duration": rendered["duration"],
-    "footage": [{"beat": r["id"], "source": r["source"], "retried": r.get("retried", False), **r["provenance"]} for r in footage],
-    "retried": rendered["retried"],
-    "qc": {
-        "passed": qc["global_ok"],
-        "flagged_beats": {k: [f["issue"] for f in v] for k, v in qc["beats"].items() if v},
-        "vision_summary": qc_review["summary"],
-    },
+    "render": {"seconds": rendered["render_seconds"], "summary": rendered["render_summary"]},
+    "edit_summary": editor["summary"],
+    "footage": [{"need": r["id"], "source": r["source"], **r["provenance"]} for r in footage],
+    "qc": {"passed": qc["global_ok"], "flags": qc["flags"]},
 }
 (staging / "manifest.json").write_text(json.dumps(manifest, indent=1))
 if dest.exists():
@@ -78,14 +79,13 @@ os.replace(tmp_link, latest)
 
 with (state_dir() / "library.jsonl").open("a") as fh:
     fh.write(json.dumps({
-        "run_id": rid, "created_at": manifest["created_at"], "kind": cfg["kind"], "topic": manifest["topic"],
+        "run_id": rid, "created_at": manifest["created_at"], "brief": cfg["brief"][:300],
         "title": pick["title"], "hook": pick["narration"].split(".")[0], "path": str(dest),
         "config_digest": cfg["config_digest"], "playbook_version": cfg["playbook_version"],
-        "music_track": rendered["music_track"], "frame_hashes": list(qc["frame_hashes"].values()),
+        "frame_hashes": qc["frame_hashes"],
         "footage": [f"{r['provenance'].get('provider')}:{r['provenance'].get('id')}" for r in footage],
         "qc_passed": qc["global_ok"],
     }) + "\n")
 
 emit({"path": str(dest), "video": str(dest / "video.mp4"), "latest": str(latest), "qc_passed": qc["global_ok"],
-      "playbook_version": cfg["playbook_version"], "retried": rendered["retried"],
-      "flagged_beats": manifest["qc"]["flagged_beats"]})
+      "playbook_version": cfg["playbook_version"], "flags": [f"{f['t']:.1f}s {f['issue']}" for f in qc["flags"]]})

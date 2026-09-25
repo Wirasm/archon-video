@@ -1,6 +1,6 @@
-"""Near-duplicate shots, within a video and against recent videos.
+"""Near-duplicate shots against recent videos.
 
-A 64-bit difference hash of each beat's middle frame. Two shots within
+A 64-bit difference hash of frames sampled through the video. Two frames within
 Hamming distance MAX_DISTANCE read as the same shot to a viewer, which is the
 repetition YouTube's inauthentic-content policy targets.
 """
@@ -28,20 +28,8 @@ def distance(a: str, b: str) -> int:
     return bin(int(a, 16) ^ int(b, 16)).count("1")
 
 
-def repeats_within(hashes: dict[str, str]) -> dict[str, str]:
-    """beat id -> the earlier beat it repeats."""
-    ids = list(hashes)
-    found = {}
-    for i, later in enumerate(ids):
-        for earlier in ids[:i]:
-            if distance(hashes[later], hashes[earlier]) <= MAX_DISTANCE:
-                found[later] = earlier
-                break
-    return found
-
-
 def repeats_across(hashes: dict[str, str], library: list[dict]) -> dict[str, str]:
-    """beat id -> run id of a recent stored video with a matching shot."""
+    """label -> run id of a recent stored video with a matching frame."""
     found = {}
     for bid, h in hashes.items():
         for row in library:

@@ -1,4 +1,4 @@
-"""Read words.json, whichever node wrote it, and list the words for the beat planner."""
+"""Read words.json, whichever node wrote it, and list the words for the director and editor."""
 
 import sys
 from pathlib import Path
