@@ -23,6 +23,7 @@ nodes:
   # Vision: must open the frame sheets, so it pins Claude and no tier.
   - id: review
     command: review
+    allowed_tools: [Read]
     provider: claude
     depends_on: [gather]
     output_format:

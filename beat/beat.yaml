@@ -27,6 +27,7 @@ nodes:
   # Vision: must open the contact sheet, so it pins Claude and no tier.
   - id: pick
     command: stock-pick
+    allowed_tools: [Read]
     provider: claude
     depends_on: [search]
     with:
@@ -56,6 +57,7 @@ nodes:
 
   - id: pick-2
     command: stock-pick
+    allowed_tools: [Read]
     provider: claude
     depends_on: [requery]
     with:

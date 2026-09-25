@@ -26,11 +26,15 @@ nodes:
         moods: { type: array, items: { type: string } }
         playbook_version: { type: integer }
         context: { type: string }
-      required: [kind, format, config_digest, length_min, length_max, moods, playbook_version, context]
+        recent_openings: { type: string }
+      required: [kind, format, config_digest, length_min, length_max, moods, playbook_version, context, recent_openings]
 
   # ── Hooks: five openings, a pairwise tournament, the best three ──────────
+  # Text-only agents get no tools: with a shell, the copy writer once searched
+  # the filesystem for "the finished video" instead of reading its prompt.
   - id: hooks
     command: hooks
+    allowed_tools: []
     model: large
     depends_on: [preflight]
     output_format:
@@ -91,6 +95,7 @@ nodes:
   # ── Scripts and the one human decision ───────────────────────────────────
   - id: scripts
     command: scripts
+    allowed_tools: []
     model: large
     depends_on: [rank]
     output_format:
@@ -140,6 +145,7 @@ nodes:
 
   - id: pick
     command: pick
+    allowed_tools: []
     model: medium
     depends_on: [pick-gate]
     output_format:
@@ -155,6 +161,7 @@ nodes:
 
   - id: copy
     command: copy
+    allowed_tools: []
     model: medium
     depends_on: [pick]
     output_format:
@@ -219,6 +226,7 @@ nodes:
 
   - id: beats
     command: beats
+    allowed_tools: []
     model: large
     depends_on: [words]
     output_format:
@@ -306,6 +314,7 @@ nodes:
   # Vision: must open the review sheets, so it pins Claude and no tier.
   - id: qc-review
     command: qc-review
+    allowed_tools: [Read]
     provider: claude
     depends_on: [qc]
     output_format:

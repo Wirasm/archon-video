@@ -10,6 +10,7 @@ returns: judge
 nodes:
   - id: judge
     command: judge
+    allowed_tools: []
     model: medium
     output_format:
       type: object
