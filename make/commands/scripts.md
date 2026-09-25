@@ -1,6 +1,4 @@
-Write one full narration script for each of the three openings below, for a short vertical video about:
-
-$INPUTS.topic
+Write one full narration script for each of the three openings below, for the short video the brief describes.
 
 $preflight.output.context
 

@@ -18,8 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".shared"))
 
 import yaml
 
-from vidlib import SHARED_DIR
-from vidlib import playbook
+from vidlib import hyperframes, playbook
 from vidlib.config import ConfigError, digest, resolve
 from vidlib.context import context_block, recent_openings
 from vidlib.node import artifacts_dir, emit, state_dir, text_input
@@ -30,23 +29,29 @@ def check_binaries() -> list[str]:
     for binary in ("ffmpeg", "ffprobe"):
         if not shutil.which(binary):
             problems.append(f"{binary} is not on PATH (brew install ffmpeg, or apt-get install ffmpeg)")
-    if not problems:
-        filters = subprocess.run(["ffmpeg", "-hide_banner", "-filters"], capture_output=True, text=True).stdout
-        if " ass " not in filters:
-            problems.append("ffmpeg has no libass (the `ass` filter); captions need an ffmpeg built with libass")
+    # The composition renders with HyperFrames, which needs Node 22 or newer.
+    node = shutil.which("node")
+    if not node or not shutil.which("npx"):
+        problems.append("node and npx are not on PATH; HyperFrames needs Node 22 or newer")
+    else:
+        version = subprocess.run([node, "--version"], capture_output=True, text=True).stdout.strip().lstrip("v")
+        if int(version.split(".")[0] or 0) < 22:
+            problems.append(f"node {version} is too old; HyperFrames needs Node 22 or newer")
     return problems
 
 
-def recent_hooks(kind: str, limit: int = 10) -> list[str]:
+def recent_hooks(limit: int = 10) -> list[str]:
     library = state_dir() / "library.jsonl"
     if not library.exists():
         return []
     rows = [json.loads(line) for line in library.read_text().splitlines() if line.strip()]
-    return [r["hook"] for r in rows if r.get("kind") == kind and r.get("hook")][-limit:]
+    return [r["hook"] for r in rows if r.get("hook")][-limit:]
 
 
 def main() -> None:
-    kind = text_input("kind", "social")
+    brief = text_input("brief").strip()
+    if not brief:
+        raise SystemExit("the brief is empty")
     config_path = Path(text_input("config", "video.config.yaml")).expanduser()
     if not config_path.is_absolute():
         config_path = Path.cwd() / config_path
@@ -60,7 +65,7 @@ def main() -> None:
 
     raw_text = config_path.read_text()
     try:
-        cfg = resolve(yaml.safe_load(raw_text) or {}, kind, config_path.parent, dict(os.environ))
+        cfg = resolve(yaml.safe_load(raw_text) or {}, config_path.parent, dict(os.environ))
     except ConfigError as err:
         problems += err.problems
     if problems:
@@ -68,9 +73,9 @@ def main() -> None:
 
     cfg["config_file"] = str(config_path)
     cfg["config_digest"] = digest(raw_text)
-    kind_brief = (SHARED_DIR / "kinds" / f"{kind}.md").read_text()
+    cfg["brief"] = brief
     facts = Path(cfg["facts_file"]).read_text() if cfg["facts_file"] else None
-    hooks = recent_hooks(kind)
+    hooks = recent_hooks()
     events = playbook.load(state_dir() / "playbook.jsonl")
     cfg["playbook_version"] = playbook.version(events)
 
@@ -80,15 +85,15 @@ def main() -> None:
 
     emit(
         {
-            "kind": kind,
             "format": cfg["format"]["name"],
             "config_digest": cfg["config_digest"],
             "length_min": cfg["length_s"]["min"],
             "length_max": cfg["length_s"]["max"],
-            "moods": cfg["music"]["moods"],
             "playbook_version": cfg["playbook_version"],
-            "context": context_block(cfg, kind_brief, facts, playbook.render(events, kind)),
+            "context": context_block(cfg, brief, facts, playbook.render(events)),
             "recent_openings": recent_openings(hooks),
+            "hyperframes": hyperframes.PACKAGE,
+            "music": "\n".join(f"- {Path(t).relative_to(cfg['music']['dir'])}" for t in cfg["music"]["tracks"]) or "(no music library)",
         }
     )
 

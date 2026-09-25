@@ -1,61 +1,54 @@
-# archon-video config. Copy to <project>/video.config.yaml and edit.
-# Keys (CARTESIA_API_KEY, PEXELS_API_KEY) never go here; see the README.
+# archon-video config: design tokens only. Copy to <project>/video.config.yaml.
+# Everything about how a video is edited (structure, pacing, cuts, text, motion,
+# colour, music placement) is decided by the agents from your brief. The brand
+# block is guidance they interpret, not a template.
+# Keys (CARTESIA_API_KEY, PEXELS_API_KEY, ...) never go here; see the README.
 # Relative paths resolve from the directory that holds this file.
 version: 1
 
 brand:
   name: Acme
-  # Brand tokens are the main creative lever. Every agent that writes copy or
-  # picks visuals receives this whole block, so add any key you like.
-  # The renderer also reads colors.text, colors.accent, colors.outline,
-  # fonts.captions and captions.uppercase.
-  tokens:
-    colors: { primary: "#0B1020", accent: "#FFD60A", text: "#FFFFFF", outline: "#000000" }
-    fonts:
-      # family must be installed, or give `file` (a .ttf/.otf) so the renderer can load it.
-      captions: { family: "Arial Black" }
-    captions: { style: "2-3 word pops, active word in accent, heavy outline", uppercase: true }
-    look: "natural light, real people, warm grade; never glossy corporate stock"
+  # Every agent receives this whole block. Add any key you like.
+  colors: { primary: "#0B1020", accent: "#FFD60A", text: "#FFFFFF", secondary: "#4CC9F0" }
+  fonts:
+    # `file` (a .ttf/.otf/.woff2) is copied into the edit so the renderer can load it.
+    display: { family: "Inter" }
+    body: { family: "Inter" }
+  # logo: "brand/logo.svg"
+  look: "natural light, real people, warm grade; never glossy corporate stock"
   voice_and_tone: |
     Plain, dry, specific. Sounds like a person who has done the work.
   audience: "solo founders and small ops teams"
-  # facts: "brand/facts.md"   # claims product and marketing videos may make; nothing else
-
-kinds:
-  social: {}
-  # product:   { cta: "Try it free at acme.dev" }
-  # marketing: { cta: "Join the waitlist" }
-  ugc:
-    mode: faceless
-    # A synthetic presenter for UGC videos. Off unless enabled, and synthetic
-    # only: the pack never animates a real person's likeness.
-    avatar:
-      enabled: false
-      persona: "late-20s creator, casual, filming on a phone at a desk"
+  # Hard constraints: plain-language musts and must-nots every edit follows.
+  constraints:
+    - "Never show a competitor's logo."
+  # facts: "brand/facts.md"   # claims a video may make about the brand; nothing else
 
 voice:
   # cartesia (default) and elevenlabs return word timings with the audio.
-  # deepgram and kokoro (free, runs locally, no key) return audio only, and a
-  # local forced aligner times the words (downloads torch once, about 1 GB).
+  # deepgram and kokoro (free, local, no key) return audio only, and a local
+  # forced aligner times the words (installs torch once, about 1 GB).
   provider: cartesia
   voice_id: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"   # cartesia/elevenlabs voice id; kokoro voice name, e.g. af_heart
   model: "sonic-3.5"      # provider model id; for deepgram this names the voice, e.g. aura-2-thalia-en
   timings: auto           # auto: native timings when the provider has them; align: always use the aligner
 
-# A named output format: shorts | reels | tiktok (9:16, supported)
+# A named output format: shorts | reels | tiktok (9:16, supported).
 # youtube (16:9) and square (1:1) are known but not supported yet.
 format: shorts
 length_s: { min: 25, max: 45 }
 
-source:
-  mode: stock           # stock | mixed | ai  (mixed and ai are not supported yet)
-  motion: false         # motion-graphics beats (not supported yet)
-  stock: { provider: pexels }
+stock: { provider: pexels }
 
+# Optional music library: audio files, in folders if you like. The agents choose
+# tracks by name and length, so name files and folders descriptively (mood, tempo).
 music:
-  # Optional. <dir>/<mood>/*.mp3|wav|m4a; the mood folder names are the choices.
   # dir: "music/"
-  duck: true
+
+# A synthetic presenter for creator-style videos. Off unless enabled, and
+# synthetic only: the pack never animates a real person's likeness.
+avatar:
+  enabled: false
 
 # Where finished videos are stored. Default: Archon's state folder for this
 # project (~/.archon/workspaces/<project>/state/video/videos/<run-id>/) with a

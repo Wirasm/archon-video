@@ -1,12 +1,12 @@
-"""Load and resolve video.config.yaml.
+"""Load and resolve video.config.yaml: design tokens, voice, format, sources.
 
 Preflight is the only reader of the YAML file. It writes the resolved result to
 $ARTIFACTS_DIR/config.json and every later node reads that copy, so editing the
 config mid-run cannot change a run.
 
-Validation is deliberately light: it rejects only what a later script needs and
-cannot guess (an unknown provider, a missing key, a missing file, a format or
-source this version cannot render). Everything under `brand` passes through.
+Validation rejects only what a later script needs and cannot guess: an unknown
+provider, a missing key, a missing file, a format this version cannot render.
+The brand block passes through to the agents unvalidated.
 """
 
 from __future__ import annotations
@@ -19,17 +19,12 @@ from typing import Any
 from .formats import FORMATS, get_format
 from .voice import KEYS as VOICE_KEYS
 
-# What this version of the pack can produce. Anything else is refused at
-# preflight with "not supported yet" rather than half-built.
-SUPPORTED_KINDS = {"social"}
-PLANNED_KINDS = {"product", "marketing", "ugc"}
 TIMINGS = {"auto", "align"}
 # Providers whose voice is chosen by voice_id; Deepgram names the voice in `model`.
 NEEDS_VOICE_ID = {"cartesia", "elevenlabs"}
-SOURCE_MODES = {"stock"}
-PLANNED_SOURCE_MODES = {"mixed", "ai"}
 STOCK_PROVIDERS = {"pexels": "PEXELS_API_KEY"}
-MUSIC_EXTENSIONS = {".mp3", ".wav", ".m4a"}
+MUSIC_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
+FONT_EXTENSIONS = {".ttf", ".otf", ".woff", ".woff2"}
 
 
 class ConfigError(Exception):
@@ -46,39 +41,43 @@ def _get(d: Any, *path: str, default: Any = None) -> Any:
     return d
 
 
-def resolve(raw: dict, kind: str, base_dir: Path, env: dict[str, str]) -> dict:
+def resolve(raw: dict, base_dir: Path, env: dict[str, str]) -> dict:
     """Return the resolved config, or raise ConfigError listing every problem."""
     problems: list[str] = []
 
     if raw.get("version") != 1:
         problems.append(f"version must be 1 (got {raw.get('version')!r})")
-
-    if kind in PLANNED_KINDS:
-        problems.append(f"kind {kind!r} is not supported yet; this version makes: {', '.join(sorted(SUPPORTED_KINDS))}")
-    elif kind not in SUPPORTED_KINDS:
-        problems.append(f"unknown kind {kind!r}; known kinds: {', '.join(sorted(SUPPORTED_KINDS | PLANNED_KINDS))}")
+    for retired in ("kinds", "source"):
+        if retired in raw:
+            problems.append(f"`{retired}` is no longer a config key: the brief decides what a video is and how it is made")
 
     brand = raw.get("brand")
     if not isinstance(brand, dict) or not brand.get("name"):
         problems.append("brand.name is required")
         brand = brand if isinstance(brand, dict) else {}
 
-    def existing_file(value: Any, field: str) -> str | None:
+    def existing_file(value: Any, field: str) -> Path | None:
         if value in (None, ""):
             return None
         p = (base_dir / str(value)).expanduser().resolve()
-        if not p.exists():
+        if not p.is_file():
             problems.append(f"{field}: {p} does not exist")
-        return str(p)
+        return p
 
-    facts_path = existing_file(brand.get("facts"), "brand.facts")
-    caption_font = _get(brand, "tokens", "fonts", "captions", default={}) or {}
-    font_file = existing_file(caption_font.get("file"), "brand.tokens.fonts.captions.file")
+    facts = existing_file(brand.get("facts"), "brand.facts")
+    logo = existing_file(brand.get("logo"), "brand.logo")
+    font_files: dict[str, str] = {}
+    for role, font in (brand.get("fonts") or {}).items():
+        if isinstance(font, dict) and font.get("file"):
+            p = existing_file(font["file"], f"brand.fonts.{role}.file")
+            if p and p.suffix.lower() not in FONT_EXTENSIONS:
+                problems.append(f"brand.fonts.{role}.file must be one of {sorted(FONT_EXTENSIONS)}")
+            if p:
+                font_files[role] = str(p)
 
-    if _get(raw, "kinds", "ugc", "avatar", "enabled", default=False):
-        problems.append("kinds.ugc.avatar.enabled: the synthetic avatar is not supported yet")
+    if _get(raw, "avatar", "enabled", default=False):
+        problems.append("avatar.enabled: the synthetic avatar is not supported yet")
 
-    # Voice
     provider = _get(raw, "voice", "provider", default="cartesia")
     voice_id = _get(raw, "voice", "voice_id")
     timings = _get(raw, "voice", "timings", default="auto")
@@ -93,7 +92,6 @@ def resolve(raw: dict, kind: str, base_dir: Path, env: dict[str, str]) -> dict:
     if timings not in TIMINGS:
         problems.append(f"voice.timings must be auto or align (got {timings!r})")
 
-    # Format
     fmt_name = raw.get("format", "shorts")
     fmt = None
     if not isinstance(fmt_name, str):
@@ -113,68 +111,37 @@ def resolve(raw: dict, kind: str, base_dir: Path, env: dict[str, str]) -> dict:
     elif fmt and length_max > fmt.max_duration_s:
         problems.append(f"length_s.max {length_max} exceeds the {fmt.name} ceiling of {fmt.max_duration_s}s")
 
-    # Source
-    mode = _get(raw, "source", "mode", default="stock")
-    if mode in PLANNED_SOURCE_MODES:
-        problems.append(f"source.mode {mode!r} (AI video) is not supported yet; use stock")
-    elif mode not in SOURCE_MODES:
-        problems.append(f"unknown source.mode {mode!r}")
-    if _get(raw, "source", "motion", default=False):
-        problems.append("source.motion: motion-graphics beats are not supported yet; set it to false")
-    stock = _get(raw, "source", "stock", "provider", default="pexels")
+    stock = _get(raw, "stock", "provider", default="pexels")
     if stock not in STOCK_PROVIDERS:
-        problems.append(f"unknown source.stock.provider {stock!r}")
+        problems.append(f"unknown stock.provider {stock!r}")
     elif not env.get(STOCK_PROVIDERS[stock]):
-        problems.append(f"source.stock.provider {stock} needs {STOCK_PROVIDERS[stock]} in Archon's env (~/.archon/.env)")
+        problems.append(f"stock.provider {stock} needs {STOCK_PROVIDERS[stock]} in Archon's env (~/.archon/.env)")
 
-    # Music: optional. The mood folders that hold at least one track are the choices.
+    music: list[str] = []
     music_dir = None
-    moods: list[str] = []
     if _get(raw, "music", "dir"):
         music_dir = (base_dir / str(raw["music"]["dir"])).expanduser().resolve()
         if not music_dir.is_dir():
             problems.append(f"music.dir: {music_dir} is not a directory")
         else:
-            moods = sorted(
-                d.name
-                for d in music_dir.iterdir()
-                if d.is_dir() and any(f.suffix.lower() in MUSIC_EXTENSIONS for f in d.iterdir())
-            )
-            if not moods:
-                problems.append(f"music.dir: {music_dir} has no <mood>/ folder with a track in it")
+            music = sorted(str(p) for p in music_dir.rglob("*") if p.suffix.lower() in MUSIC_EXTENSIONS)
+            if not music:
+                problems.append(f"music.dir: {music_dir} holds no audio files")
 
     output_dir = _get(raw, "output", "dir")
-
     if problems:
         raise ConfigError(problems)
 
     return {
-        "kind": kind,
         "brand": brand,
-        "facts_file": facts_path,
-        "kind_options": _get(raw, "kinds", kind, default={}) or {},
-        "voice": {
-            "provider": provider,
-            "voice_id": voice_id,
-            "model": _get(raw, "voice", "model"),
-            "timings": timings,
-        },
+        "facts_file": str(facts) if facts else None,
+        "logo_file": str(logo) if logo else None,
+        "font_files": font_files,
+        "voice": {"provider": provider, "voice_id": voice_id, "model": _get(raw, "voice", "model"), "timings": timings},
         "format": fmt.to_dict() if fmt else None,
         "length_s": {"min": length_min, "max": length_max},
-        "source": {"mode": mode, "motion": False, "stock": {"provider": stock}},
-        "music": {
-            "dir": str(music_dir) if music_dir else None,
-            "moods": moods,
-            "duck": bool(_get(raw, "music", "duck", default=True)),
-        },
-        "captions": {
-            "font_family": caption_font.get("family") or "Arial Black",
-            "font_file": font_file,
-            "uppercase": bool(_get(brand, "tokens", "captions", "uppercase", default=True)),
-            "text": _get(brand, "tokens", "colors", "text", default="#FFFFFF"),
-            "accent": _get(brand, "tokens", "colors", "accent", default="#FFD60A"),
-            "outline": _get(brand, "tokens", "colors", "outline", default="#000000"),
-        },
+        "stock": {"provider": stock},
+        "music": {"dir": str(music_dir) if music_dir else None, "tracks": music},
         "output_dir": str((base_dir / str(output_dir)).expanduser().resolve()) if output_dir else None,
     }
 

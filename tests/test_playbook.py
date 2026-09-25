@@ -12,17 +12,10 @@ def test_rules_are_numbered_revised_and_retired_by_id(tmp_path):
     pb.append(path, "revise", "R1", "kind", "social", "Open on the object in hand.", "b01", PROV)
     events = pb.load(path)
     assert pb.version(events) == 3
-    assert {r["rule_id"]: r["text"] for r in pb.for_kind(events, "social")} == {
+    assert {r["rule_id"]: r["text"] for r in pb.active(events).values()} == {
         "R1": "Open on the object in hand.", "R2": "No shot over 4 s."}
     pb.append(path, "retire", "R2", "kind", "social", "", "", PROV)
-    assert [r["rule_id"] for r in pb.for_kind(pb.load(path), "social")] == ["R1"]
-
-
-def test_a_rule_for_one_kind_stays_out_of_another(tmp_path):
-    path = tmp_path / "playbook.jsonl"
-    pb.append(path, "add", "", "kind", "product", "Show the product in the first frame.", "", PROV)
-    pb.append(path, "add", "", "common", "product", "Captions never over faces.", "", PROV)
-    assert [r["rule_id"] for r in pb.for_kind(pb.load(path), "social")] == ["R2"]
+    assert list(pb.active(pb.load(path))) == ["R1"]
 
 
 def test_numbering_never_reuses_a_retired_id(tmp_path):

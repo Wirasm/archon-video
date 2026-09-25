@@ -45,16 +45,15 @@ def active(events: list[dict]) -> dict[str, dict]:
     return rules
 
 
-def for_kind(events: list[dict], kind: str) -> list[dict]:
-    return [r for r in active(events).values() if r["scope"] == "common" or r["kind"] == kind]
-
-
-def render(events: list[dict], kind: str) -> str:
-    rules = for_kind(events, kind)
+def render(events: list[dict]) -> str:
+    rules = list(active(events).values())
     if not rules:
         return ""
-    lines = [f"House rules (playbook v{version(events)}), learned from reviewed videos. Follow them:"]
-    lines += [f"- {r['rule_id']} ({'all kinds' if r['scope'] == 'common' else kind}): {r['text']}" for r in rules]
+    lines = [
+        f"## Lessons from reviewed videos (playbook v{version(events)})",
+        "Each was approved by a person after a review. Weigh them against this brief; they are evidence, not a template.",
+    ]
+    lines += [f"- {r['rule_id']}: {r['text']}" for r in rules]
     return "\n".join(lines)
 
 

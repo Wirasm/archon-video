@@ -1,6 +1,4 @@
-You are writing openings for a short vertical video about:
-
-$INPUTS.topic
+You are writing openings for a short video. The brief below says what it is about, who it is for and anything else it should be.
 
 $preflight.output.context
 
