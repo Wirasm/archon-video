@@ -52,7 +52,7 @@ def pick_file(files: list[dict], width: int, height: int) -> dict | None:
     return max(usable, key=lambda f: f["width"] * f["height"])
 
 
-def search(queries: list[str], min_duration: float, width: int, height: int, limit: int = 9) -> list[Candidate]:
+def search(queries: list[str], min_duration: float, width: int, height: int, limit: int = 9, avoid: set[str] = frozenset()) -> list[Candidate]:
     orientation = "portrait" if height > width else "landscape"
     session = _session()
     seen: set[int] = set()
@@ -73,7 +73,7 @@ def search(queries: list[str], min_duration: float, width: int, height: int, lim
             raise SystemExit("Pexels rate limit reached (200 requests per hour by default)")
         r.raise_for_status()
         for v in r.json().get("videos", []):
-            if v["id"] in seen or v.get("duration", 0) < min_duration:
+            if v["id"] in seen or str(v["id"]) in avoid or v.get("duration", 0) < min_duration:
                 continue
             f = pick_file(v.get("video_files", []), width, height)
             pictures = [p["picture"] for p in v.get("video_pictures", []) if p.get("picture")]
