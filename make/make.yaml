@@ -237,3 +237,57 @@ nodes:
       items: "$edl.output.beats"
       as: beat
       max_parallel: 3
+
+  # ── Render, measure, store ───────────────────────────────────────────────
+  - id: render
+    script: render
+    runtime: uv
+    timeout: 900000
+    depends_on: [footage, voice]
+    with:
+      footage: $footage.output
+      overlay: $pick.output.overlay
+    output_format:
+      type: object
+      properties:
+        video: { type: string }
+        srt: { type: string }
+        duration: { type: number }
+        music_track: { type: [string, "null"] }
+        mood: { type: [string, "null"] }
+        loudness_before: { type: object }
+      required: [video, srt, duration, music_track, mood, loudness_before]
+
+  - id: qc
+    script: qc
+    runtime: uv
+    timeout: 300000
+    depends_on: [render]
+    with:
+      footage: $footage.output
+    output_format:
+      type: object
+      properties:
+        passed: { type: boolean }
+        flagged_beats: { type: object }
+        measurements: { type: object }
+      required: [passed, flagged_beats, measurements]
+
+  - id: store
+    script: store
+    runtime: uv
+    timeout: 120000
+    depends_on: [qc, copy]
+    with:
+      pick: $pick.output
+      copy: $copy.output
+      footage: $footage.output
+    output_format:
+      type: object
+      properties:
+        path: { type: string }
+        video: { type: string }
+        latest: { type: string }
+        qc_passed: { type: boolean }
+        flagged_beats: { type: object }
+      required: [path, video, latest, qc_passed, flagged_beats]

@@ -63,7 +63,7 @@ archon workflow approve <run-id> "Script 2, but cut the last sentence"
 
 An empty comment takes the judge's top pick unchanged. Reject to cancel the run.
 
-Each stored video folder holds `video.mp4`, `captions.srt`, `copy.json` (titles, captions and tags per platform), `script.json`, `edl.json`, `qc.json` and `manifest.json` (config digest, voice provider and model, and where every clip came from).
+Each stored video folder holds `video.mp4`, `captions.srt`, `copy.json` (titles, captions and tags per platform), `script.json`, `edl.json` (the cut list), `qc.json`, `narration.wav`, `words.json`, the resolved `config.json` and `manifest.json` (config digest, voice provider and model, music track, and where every clip came from). QC flags that did not fail the run, such as the same stock clip used in two beats, are listed in `qc.json` and `manifest.json`.
 
 ## Cost
 
