@@ -11,7 +11,7 @@ from vidlib import playbook
 from vidlib.node import emit, json_input, run_id, state_dir, text_input
 
 review = json_input("review")
-p = review["proposal"]
+p = review
 video_run, kind, comment = text_input("run_id"), text_input("kind"), text_input("comment", "")
 provenance = {"video_run": video_run, "review_run": run_id(), "approver_comment": comment}
 path = state_dir() / "playbook.jsonl"

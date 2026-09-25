@@ -31,17 +31,15 @@ nodes:
         verdict: { type: string }
         strengths: { type: array, items: { type: string } }
         defects: { type: array, items: { type: string } }
-        proposal:
-          type: object
-          properties:
-            action: { type: string, enum: [add, revise, retire, none] }
-            rule_id: { type: string }
-            scope: { type: string, enum: [kind, common] }
-            text: { type: string }
-            evidence: { type: string }
-          required: [action, rule_id, scope, text, evidence]
+        # The proposal's fields sit at the top level: output references reach
+        # one field deep, and the gate message shows each of them.
+        action: { type: string, enum: [add, revise, retire, none] }
+        rule_id: { type: string }
+        scope: { type: string, enum: [kind, common] }
+        text: { type: string }
+        evidence: { type: string }
         watch_next: { type: string }
-      required: [verdict, strengths, defects, proposal, watch_next]
+      required: [verdict, strengths, defects, action, rule_id, scope, text, evidence, watch_next]
 
   - id: gate
     depends_on: [review]
@@ -52,10 +50,10 @@ nodes:
 
         Verdict: $review.output.verdict
 
-        Proposed playbook change: $review.output.proposal.action $review.output.proposal.rule_id ($review.output.proposal.scope)
-        $review.output.proposal.text
+        Proposed playbook change: $review.output.action $review.output.rule_id (scope: $review.output.scope)
+        $review.output.text
 
-        Evidence: $review.output.proposal.evidence
+        Evidence: $review.output.evidence
 
         Watch next time: $review.output.watch_next
 
