@@ -1,9 +1,11 @@
-Write the social post copy for this finished short.
+Write the social post copy for a finished short. Everything you need is in this message: the video's title and full narration are below, between the <video> tags. There are no files to look for.
 
 $preflight.output.context
 
+<video>
 Title: $pick.output.title
 Narration: $pick.output.narration
+</video>
 
 The hardest rule: only promise what the narration delivers. A description offering "5 ways to fix it" for a video that contains no five ways is a lie that costs the retention it buys. If the narration is reflective rather than practical, sell the insight, not a checklist.
 

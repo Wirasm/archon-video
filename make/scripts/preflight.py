@@ -21,6 +21,7 @@ import yaml
 from vidlib import SHARED_DIR
 from vidlib import playbook
 from vidlib.config import ConfigError, digest, resolve
+from vidlib.context import context_block, recent_openings
 from vidlib.node import artifacts_dir, emit, state_dir, text_input
 
 
@@ -42,37 +43,6 @@ def recent_hooks(kind: str, limit: int = 10) -> list[str]:
         return []
     rows = [json.loads(line) for line in library.read_text().splitlines() if line.strip()]
     return [r["hook"] for r in rows if r.get("kind") == kind and r.get("hook")][-limit:]
-
-
-def context_block(cfg: dict, kind_brief: str, facts: str | None, hooks: list[str], rules: str) -> str:
-    brand = cfg["brand"]
-    fmt = cfg["format"]
-    parts = [
-        f"## Brand: {brand['name']}",
-        "Brand tokens (the main creative lever; follow them):",
-        "```json\n" + json.dumps(brand.get("tokens", {}), indent=2) + "\n```",
-    ]
-    if brand.get("voice_and_tone"):
-        parts.append("Voice and tone:\n" + str(brand["voice_and_tone"]).strip())
-    if brand.get("audience"):
-        parts.append(f"Audience: {brand['audience']}")
-    parts.append(kind_brief.strip())
-    if cfg["kind_options"]:
-        parts.append("Options for this kind: " + json.dumps(cfg["kind_options"]))
-    parts.append(
-        f"Format: {fmt['name']}, {fmt['aspect']} vertical video at {fmt['width']}x{fmt['height']}. "
-        f"Target length: {cfg['length_s']['min']}-{cfg['length_s']['max']} seconds of narration."
-    )
-    if facts:
-        parts.append("Facts you may state (claim nothing about the brand beyond these):\n" + facts.strip())
-    if rules:
-        parts.append(rules)
-    if hooks:
-        parts.append(
-            "Recent openings for this kind (do not repeat their angle or structure):\n"
-            + "\n".join(f"- {h}" for h in hooks)
-        )
-    return "\n\n".join(parts)
 
 
 def main() -> None:
@@ -117,7 +87,8 @@ def main() -> None:
             "length_max": cfg["length_s"]["max"],
             "moods": cfg["music"]["moods"],
             "playbook_version": cfg["playbook_version"],
-            "context": context_block(cfg, kind_brief, facts, hooks, playbook.render(events, kind)),
+            "context": context_block(cfg, kind_brief, facts, playbook.render(events, kind)),
+            "recent_openings": recent_openings(hooks),
         }
     )
 

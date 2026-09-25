@@ -4,6 +4,8 @@ $INPUTS.topic
 
 $preflight.output.context
 
+$preflight.output.recent_openings
+
 Most of these videos are seen in a feed the viewer did not choose. The first second decides whether they stay. An opening has three channels that should work together:
 
 - `first_frame`: what the viewer sees before any word is spoken. Describe a real, filmable shot.
