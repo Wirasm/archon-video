@@ -1,0 +1,61 @@
+# archon-video config. Copy to <project>/video.config.yaml and edit.
+# Keys (CARTESIA_API_KEY, PEXELS_API_KEY) never go here; see the README.
+# Relative paths resolve from the directory that holds this file.
+version: 1
+
+brand:
+  name: Acme
+  # Brand tokens are the main creative lever. Every agent that writes copy or
+  # picks visuals receives this whole block, so add any key you like.
+  # The renderer also reads colors.text, colors.accent, colors.outline,
+  # fonts.captions and captions.uppercase.
+  tokens:
+    colors: { primary: "#0B1020", accent: "#FFD60A", text: "#FFFFFF", outline: "#000000" }
+    fonts:
+      # family must be installed, or give `file` (a .ttf/.otf) so the renderer can load it.
+      captions: { family: "Arial Black" }
+    captions: { style: "2-3 word pops, active word in accent, heavy outline", uppercase: true }
+    look: "natural light, real people, warm grade; never glossy corporate stock"
+  voice_and_tone: |
+    Plain, dry, specific. Sounds like a person who has done the work.
+  audience: "solo founders and small ops teams"
+  # facts: "brand/facts.md"   # claims product and marketing videos may make; nothing else
+
+kinds:
+  social: {}
+  # product:   { cta: "Try it free at acme.dev" }
+  # marketing: { cta: "Join the waitlist" }
+  ugc:
+    mode: faceless
+    # A synthetic presenter for UGC videos. Off unless enabled, and synthetic
+    # only: the pack never animates a real person's likeness.
+    avatar:
+      enabled: false
+      persona: "late-20s creator, casual, filming on a phone at a desk"
+
+voice:
+  provider: cartesia
+  voice_id: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"
+  model: "sonic-3.5"
+  speed: 1.0
+
+# A named output format: shorts | reels | tiktok (9:16, supported)
+# youtube (16:9) and square (1:1) are known but not supported yet.
+format: shorts
+length_s: { min: 25, max: 45 }
+
+source:
+  mode: stock           # stock | mixed | ai  (mixed and ai are not supported yet)
+  motion: false         # motion-graphics beats (not supported yet)
+  stock: { provider: pexels }
+
+music:
+  # Optional. <dir>/<mood>/*.mp3|wav|m4a; the mood folder names are the choices.
+  # dir: "music/"
+  duck: true
+
+# Where finished videos are stored. Default: Archon's state folder for this
+# project (~/.archon/workspaces/<project>/state/video/videos/<run-id>/) with a
+# `latest` link next to the run folders. Set a path to store them there instead.
+output:
+  # dir: "videos/"

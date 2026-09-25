@@ -1,0 +1,28 @@
+name: video-make
+description: "Topic -> edited vertical short. Pick one of three scripts at a gate; everything else is automatic."
+interactive: true
+# Reads video.config.yaml from the project and writes nothing into the checkout.
+worktree:
+  enabled: false
+inputs:
+  topic: { required: true, description: "What the video is about" }
+  kind: { default: social, description: "social (product, marketing and ugc come later)" }
+  config: { default: video.config.yaml, description: "Config path, relative to the project" }
+
+nodes:
+  - id: preflight
+    script: preflight
+    runtime: uv
+    deps: ["pyyaml>=6"]
+    timeout: 60000
+    output_format:
+      type: object
+      properties:
+        kind: { type: string }
+        format: { type: string }
+        config_digest: { type: string }
+        length_min: { type: number }
+        length_max: { type: number }
+        moods: { type: array, items: { type: string } }
+        context: { type: string }
+      required: [kind, format, config_digest, length_min, length_max, moods, context]

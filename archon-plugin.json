@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "kind": "workflow-pack",
+  "name": "archon-video",
+  "description": "Topic in, edited vertical short out: hook tournament, human script pick, word-timed cuts, footage chosen by looking at it, brand captions, QC.",
+  "entrypoints": {
+    "make": "make/make.yaml"
+  }
+}
