@@ -2,11 +2,12 @@
   "schemaVersion": 1,
   "kind": "workflow-pack",
   "name": "archon-video",
-  "description": "Topic in, edited vertical short out: hook tournament, human script pick, word-timed cuts, footage chosen by looking at it, brand captions, QC.",
+  "description": "Topic in, edited vertical short out: hook tournament, human script pick, word-timed cuts, footage chosen by looking at it, brand captions, QC with one retry, and a human-gated playbook that learns from reviews.",
   "compatibility": {
     "archon": ">=0.11.0"
   },
   "entrypoints": {
-    "make": "make/make.yaml"
+    "make": "make/make.yaml",
+    "review": "review/review.yaml"
   }
 }

@@ -2,13 +2,13 @@
 
 An [Archon](https://github.com/coleam00/Archon) workflow pack that turns a topic into an edited vertical short.
 
-You give it a topic. It writes five openings and has a judge compare them in pairs, writes three full scripts from the best three, and stops so you can pick one. After that it runs on its own: narration with word timings, a beat plan anchored to those words, stock footage that an agent picks by looking at contact sheets, an ffmpeg render with brand-styled captions and loudness-normalised audio, measured QC, and a stored bundle with the post copy.
+You give it a topic. It writes five openings and has a judge compare them in pairs, writes three full scripts from the best three, and stops so you can pick one. After that it runs on its own: narration with word timings, a beat plan anchored to those words, stock footage that an agent picks by looking at contact sheets, an ffmpeg render with brand-styled captions and loudness-normalised audio, measured and vision QC with one retry for bad beats, and a stored bundle with the post copy. A separate `review` run turns a critique you approve into a numbered house rule that every later video follows.
 
 It does not publish anything.
 
 ## Status
 
-Early. This version makes one kind of video (`social`) from stock footage only, in the 9:16 formats, with any of four voices. Product, marketing and UGC kinds, motion-graphics beats, AI video, the vision QC retry loop and the review playbook come in later versions. Config values for those exist so your file does not change shape, but they fail at preflight with "not supported yet".
+Early. This version makes one kind of video (`social`) from stock footage only, in the 9:16 formats, with any of four voices. Product, marketing and UGC kinds, motion-graphics beats and AI video come in later versions. Config values for those exist so your file does not change shape, but they fail at preflight with "not supported yet".
 
 ## Requirements
 
@@ -67,6 +67,21 @@ An empty comment takes the judge's top pick unchanged. Reject to cancel the run.
 
 Each stored video folder holds `video.mp4`, `captions.srt`, `copy.json` (titles, captions and tags per platform), `script.json`, `edl.json` (the cut list), `qc.json`, `narration.wav`, `words.json`, the resolved `config.json` and `manifest.json` (config digest, voice provider and model, music track, and where every clip came from). QC flags that did not fail the run, such as the same stock clip used in two beats, are listed in `qc.json` and `manifest.json`.
 
+### What happens after the render
+
+QC measures the cut (geometry, loudness, dead air, black or frozen frames, cut sync) and checks it for repeated shots: the same clip twice, two beats that look alike, or a shot that appeared in one of the last 20 videos. Stock clips used by those recent videos are left out of new searches. A vision check then looks at every beat's frames. Each beat it flags, and each beat QC flags for a repeat or a black or frozen picture, gets new footage once, with the reviewer's note guiding the new pick; the video is re-rendered and measured again. A beat that is still flagged ships with the flag recorded in `manifest.json`.
+
+## Review and the playbook
+
+```bash
+archon workflow run Wirasm/archon-video:review                      # newest video not yet reviewed
+archon workflow run Wirasm/archon-video:review --input video=<run-id>
+```
+
+A reviewer agent looks at the stored video's frames, script, cut list and QC, gives a verdict, and proposes one change to the playbook: add a rule, revise or retire one by id, or nothing. The run stops at a gate. Approve (your comment is kept with the change) to append it to `playbook.jsonl` in the project's state folder; reject to leave the playbook as it is.
+
+Rules are numbered (R1, R2, ...) and scoped to one kind or to all kinds. Every later `make` run puts the active rules in its prompts and records the playbook version it used in the video's manifest.
+
 ## Cost
 
 A stock-only video costs about $0.02-0.05 of Cartesia credit, and Pexels is free. The agent calls run on your Archon provider: roughly 30 calls per video, a few of them with images.
@@ -74,7 +89,7 @@ A stock-only video costs about $0.02-0.05 of Cartesia credit, and Pexels is free
 ## Develop
 
 ```bash
-uv run --with pytest --with pyyaml --with requests pytest tests -q
+uv run --with pytest --with pyyaml --with requests --with pillow pytest tests -q
 ```
 
 ## Licence

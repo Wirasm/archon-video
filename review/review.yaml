@@ -1,0 +1,80 @@
+name: video-review
+description: "Critique one stored video and propose one numbered playbook rule. A person approves before the playbook changes."
+interactive: true
+worktree:
+  enabled: false
+inputs:
+  video: { default: latest, description: "A stored video's run id, or latest for the newest video not yet reviewed" }
+
+nodes:
+  - id: gather
+    script: gather
+    runtime: uv
+    timeout: 60000
+    output_format:
+      type: object
+      properties:
+        run_id: { type: string }
+        kind: { type: string }
+        bundle: { type: string }
+        sheets: { type: array, items: { type: string } }
+      required: [run_id, kind, bundle, sheets]
+
+  # Vision: must open the frame sheets, so it pins Claude and no tier.
+  - id: review
+    command: review
+    provider: claude
+    depends_on: [gather]
+    output_format:
+      type: object
+      properties:
+        verdict: { type: string }
+        strengths: { type: array, items: { type: string } }
+        defects: { type: array, items: { type: string } }
+        proposal:
+          type: object
+          properties:
+            action: { type: string, enum: [add, revise, retire, none] }
+            rule_id: { type: string }
+            scope: { type: string, enum: [kind, common] }
+            text: { type: string }
+            evidence: { type: string }
+          required: [action, rule_id, scope, text, evidence]
+        watch_next: { type: string }
+      required: [verdict, strengths, defects, proposal, watch_next]
+
+  - id: gate
+    depends_on: [review]
+    approval:
+      capture_response: true
+      message: |
+        Review of video $gather.output.run_id ($gather.output.kind)
+
+        Verdict: $review.output.verdict
+
+        Proposed playbook change: $review.output.proposal.action $review.output.proposal.rule_id ($review.output.proposal.scope)
+        $review.output.proposal.text
+
+        Evidence: $review.output.proposal.evidence
+
+        Watch next time: $review.output.watch_next
+
+        Approve to apply this change to the playbook (your comment is kept with it as provenance). Reject to leave the playbook unchanged.
+
+  - id: apply
+    script: apply
+    runtime: uv
+    timeout: 30000
+    depends_on: [gate]
+    with:
+      review: $review.output
+      comment: $gate.output
+      run_id: $gather.output.run_id
+      kind: $gather.output.kind
+    output_format:
+      type: object
+      properties:
+        action: { type: string }
+        rule_id: { type: string }
+        playbook_version: { type: integer }
+      required: [action, rule_id, playbook_version]
