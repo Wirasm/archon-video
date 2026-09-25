@@ -37,7 +37,6 @@ voice:
   provider: cartesia
   voice_id: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"
   model: "sonic-3.5"
-  speed: 1.0
 
 # A named output format: shorts | reels | tiktok (9:16, supported)
 # youtube (16:9) and square (1:1) are known but not supported yet.

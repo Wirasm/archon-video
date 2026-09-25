@@ -152,7 +152,6 @@ def resolve(raw: dict, kind: str, base_dir: Path, env: dict[str, str]) -> dict:
             "provider": provider,
             "voice_id": voice_id,
             "model": _get(raw, "voice", "model"),
-            "speed": _get(raw, "voice", "speed", default=1.0),
         },
         "format": fmt.to_dict() if fmt else None,
         "length_s": {"min": length_min, "max": length_max},

@@ -167,3 +167,62 @@ nodes:
         hashtags: { type: array, items: { type: string } }
         alt_text: { type: string }
       required: [youtube_title, youtube_description, youtube_tags, tiktok_caption, instagram_caption, hashtags, alt_text]
+
+  # ── Voice, beat plan, cut list ───────────────────────────────────────────
+  - id: voice
+    script: voice
+    runtime: uv
+    deps: ["requests>=2.31"]
+    timeout: 600000
+    depends_on: [pick]
+    with:
+      narration: $pick.output.narration
+    output_format:
+      type: object
+      properties:
+        audio: { type: string }
+        words_file: { type: string }
+        duration: { type: number }
+        provider: { type: string }
+        timings: { type: string }
+        word_count: { type: integer }
+        indexed: { type: string }
+      required: [audio, words_file, duration, provider, timings, word_count, indexed]
+
+  - id: beats
+    command: beats
+    model: large
+    depends_on: [voice]
+    output_format:
+      type: object
+      properties:
+        mood: { type: string }
+        beats:
+          type: array
+          items:
+            type: object
+            properties:
+              start_word: { type: integer }
+              source: { type: string, enum: [stock] }
+              visual: { type: string }
+              queries: { type: array, items: { type: string } }
+              emphasis_word: { type: [integer, "null"] }
+              overlay: { type: string }
+            required: [start_word, source, visual, queries, emphasis_word, overlay]
+      required: [mood, beats]
+
+  - id: edl
+    script: edl
+    runtime: uv
+    timeout: 30000
+    depends_on: [beats]
+    with:
+      plan: $beats.output
+    output_format:
+      type: object
+      properties:
+        beats: { type: array, items: { type: object } }
+        mood: { type: [string, "null"] }
+        total: { type: number }
+        table: { type: string }
+      required: [beats, mood, total, table]
