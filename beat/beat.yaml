@@ -1,0 +1,90 @@
+name: video-beat
+description: "Support block for video-make: find the footage for one beat."
+# Instances run side by side inside one make run; each writes only its own
+# $ARTIFACTS_DIR/beats/<id>/ folder and never touches the checkout.
+mutates_checkout: false
+inputs:
+  beat: { required: true, description: "One edl.json beat" }
+  context: { required: true, description: "Brand, kind and format context" }
+returns: fetch
+
+nodes:
+  - id: search
+    script: stock-search
+    runtime: uv
+    deps: ["requests>=2.31", "pillow>=10"]
+    timeout: 180000
+    with:
+      round: 1
+    output_format: &search_result
+      type: object
+      properties:
+        sheet: { type: string }
+        candidates_file: { type: string }
+        count: { type: integer }
+      required: [sheet, candidates_file, count]
+
+  # Vision: must open the contact sheet, so it pins Claude and no tier.
+  - id: pick
+    command: stock-pick
+    provider: claude
+    depends_on: [search]
+    with:
+      sheet: $search.output.sheet
+      count: $search.output.count
+      round: 1
+    output_format: &pick_result
+      type: object
+      properties:
+        reason: { type: string }
+        found: { type: boolean }
+        choice: { type: integer }
+        requery: { type: array, items: { type: string } }
+      required: [reason, found, choice, requery]
+
+  - id: requery
+    script: stock-search
+    runtime: uv
+    deps: ["requests>=2.31", "pillow>=10"]
+    timeout: 180000
+    depends_on: [pick]
+    when: "$pick.output.found == 'false'"
+    with:
+      round: 2
+      queries: $pick.output.requery
+    output_format: *search_result
+
+  - id: pick-2
+    command: stock-pick
+    provider: claude
+    depends_on: [requery]
+    with:
+      sheet: $requery.output.sheet
+      count: $requery.output.count
+      round: 2
+    output_format: *pick_result
+
+  - id: fetch
+    script: stock-fetch
+    runtime: uv
+    deps: ["requests>=2.31"]
+    timeout: 300000
+    depends_on: [pick, pick-2]
+    trigger_rule: none_failed_min_one_success
+    with:
+      found: $pick.output.found
+      choice: $pick.output.choice
+      reason: $pick.output.reason
+      candidates: $search.output.candidates_file
+      choice_2: { from: $pick-2.output.choice, if_skipped: 0 }
+      reason_2: { from: $pick-2.output.reason, if_skipped: "" }
+      candidates_2: { from: $requery.output.candidates_file, if_skipped: "" }
+    output_format:
+      type: object
+      properties:
+        id: { type: string }
+        source: { type: string }
+        clip: { type: string }
+        provenance: { type: object }
+        reason: { type: string }
+      required: [id, source, clip, provenance, reason]

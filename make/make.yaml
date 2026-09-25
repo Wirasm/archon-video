@@ -226,3 +226,14 @@ nodes:
         total: { type: number }
         table: { type: string }
       required: [beats, mood, total, table]
+
+  # ── Footage: one block instance per beat, inside this run ────────────────
+  - id: footage
+    include: video-beat
+    depends_on: [edl]
+    with:
+      context: $preflight.output.context
+    fan_out:
+      items: "$edl.output.beats"
+      as: beat
+      max_parallel: 3
