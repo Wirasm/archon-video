@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".shared"))
 import yaml
 
 from vidlib import SHARED_DIR
+from vidlib import playbook
 from vidlib.config import ConfigError, digest, resolve
 from vidlib.node import artifacts_dir, emit, state_dir, text_input
 
@@ -43,7 +44,7 @@ def recent_hooks(kind: str, limit: int = 10) -> list[str]:
     return [r["hook"] for r in rows if r.get("kind") == kind and r.get("hook")][-limit:]
 
 
-def context_block(cfg: dict, kind_brief: str, facts: str | None, hooks: list[str]) -> str:
+def context_block(cfg: dict, kind_brief: str, facts: str | None, hooks: list[str], rules: str) -> str:
     brand = cfg["brand"]
     fmt = cfg["format"]
     parts = [
@@ -64,6 +65,8 @@ def context_block(cfg: dict, kind_brief: str, facts: str | None, hooks: list[str
     )
     if facts:
         parts.append("Facts you may state (claim nothing about the brand beyond these):\n" + facts.strip())
+    if rules:
+        parts.append(rules)
     if hooks:
         parts.append(
             "Recent openings for this kind (do not repeat their angle or structure):\n"
@@ -98,6 +101,8 @@ def main() -> None:
     kind_brief = (SHARED_DIR / "kinds" / f"{kind}.md").read_text()
     facts = Path(cfg["facts_file"]).read_text() if cfg["facts_file"] else None
     hooks = recent_hooks(kind)
+    events = playbook.load(state_dir() / "playbook.jsonl")
+    cfg["playbook_version"] = playbook.version(events)
 
     out = artifacts_dir()
     out.mkdir(parents=True, exist_ok=True)
@@ -111,7 +116,8 @@ def main() -> None:
             "length_min": cfg["length_s"]["min"],
             "length_max": cfg["length_s"]["max"],
             "moods": cfg["music"]["moods"],
-            "context": context_block(cfg, kind_brief, facts, hooks),
+            "playbook_version": cfg["playbook_version"],
+            "context": context_block(cfg, kind_brief, facts, hooks, playbook.render(events, kind)),
         }
     )
 
