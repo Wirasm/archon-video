@@ -56,3 +56,16 @@ def test_avatar_is_off_by_default_and_refused_when_enabled():
 
 def test_unbuilt_kind_is_refused():
     assert any("not supported yet" in p for p in problems(example(), kind="product"))
+
+
+@pytest.mark.parametrize("provider,key", [("elevenlabs", "ELEVENLABS_API_KEY"), ("deepgram", "DEEPGRAM_API_KEY")])
+def test_each_keyed_voice_provider_names_its_key(provider, key):
+    raw = example()
+    raw["voice"]["provider"] = provider
+    assert any(key in p for p in problems(raw))
+
+
+def test_kokoro_needs_no_key():
+    raw = example()
+    raw["voice"] = {"provider": "kokoro", "voice_id": "af_heart", "timings": "auto"}
+    assert resolve(raw, "social", EXAMPLE.parent, {"PEXELS_API_KEY": "x"})["voice"]["provider"] == "kokoro"

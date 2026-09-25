@@ -9,18 +9,20 @@ from __future__ import annotations
 import base64
 import json
 import os
-import subprocess
 from pathlib import Path
 
 import requests
+
+from . import Speech
+from ._audio import to_wav
 
 API = "https://api.cartesia.ai/tts/sse"
 API_VERSION = "2026-03-01"
 SAMPLE_RATE = 48000
 
 
-def synthesize(text: str, voice_id: str, model: str, out_wav: Path) -> tuple[float, list[tuple[str, float, float]]]:
-    """Write a mono 48 kHz wav; return (duration, [(token, start, end)])."""
+def synthesize(text: str, voice: dict, out_wav: Path) -> Speech:
+    voice_id, model = voice["voice_id"], voice["model"] or "sonic-3.5"
     resp = requests.post(
         API,
         headers={
@@ -65,10 +67,6 @@ def synthesize(text: str, voice_id: str, model: str, out_wav: Path) -> tuple[flo
 
     raw = out_wav.with_suffix(".pcm")
     raw.write_bytes(bytes(pcm))
-    subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error", "-f", "f32le", "-ar", str(SAMPLE_RATE), "-ac", "1",
-         "-i", str(raw), "-c:a", "pcm_s16le", str(out_wav)],
-        check=True,
-    )
+    duration = to_wav(raw, out_wav, ("f32le", SAMPLE_RATE))
     raw.unlink()
-    return len(pcm) / 4 / SAMPLE_RATE, timed
+    return Speech(duration, timed)

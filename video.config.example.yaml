@@ -34,9 +34,13 @@ kinds:
       persona: "late-20s creator, casual, filming on a phone at a desk"
 
 voice:
+  # cartesia (default) and elevenlabs return word timings with the audio.
+  # deepgram and kokoro (free, runs locally, no key) return audio only, and a
+  # local forced aligner times the words (downloads torch once, about 1 GB).
   provider: cartesia
-  voice_id: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"
-  model: "sonic-3.5"
+  voice_id: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"   # cartesia/elevenlabs voice id; kokoro voice name, e.g. af_heart
+  model: "sonic-3.5"      # provider model id; for deepgram this names the voice, e.g. aura-2-thalia-en
+  timings: auto           # auto: native timings when the provider has them; align: always use the aligner
 
 # A named output format: shorts | reels | tiktok (9:16, supported)
 # youtube (16:9) and square (1:1) are known but not supported yet.

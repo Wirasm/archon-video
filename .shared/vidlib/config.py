@@ -17,13 +17,15 @@ from pathlib import Path
 from typing import Any
 
 from .formats import FORMATS, get_format
+from .voice import KEYS as VOICE_KEYS
 
 # What this version of the pack can produce. Anything else is refused at
 # preflight with "not supported yet" rather than half-built.
 SUPPORTED_KINDS = {"social"}
 PLANNED_KINDS = {"product", "marketing", "ugc"}
-VOICE_PROVIDERS = {"cartesia": "CARTESIA_API_KEY"}
-PLANNED_VOICE_PROVIDERS = {"elevenlabs", "deepgram", "kokoro"}
+TIMINGS = {"auto", "align"}
+# Providers whose voice is chosen by voice_id; Deepgram names the voice in `model`.
+NEEDS_VOICE_ID = {"cartesia", "elevenlabs"}
 SOURCE_MODES = {"stock"}
 PLANNED_SOURCE_MODES = {"mixed", "ai"}
 STOCK_PROVIDERS = {"pexels": "PEXELS_API_KEY"}
@@ -78,15 +80,18 @@ def resolve(raw: dict, kind: str, base_dir: Path, env: dict[str, str]) -> dict:
 
     # Voice
     provider = _get(raw, "voice", "provider", default="cartesia")
-    if provider in PLANNED_VOICE_PROVIDERS:
-        problems.append(f"voice.provider {provider!r} is not supported yet; use cartesia")
-    elif provider not in VOICE_PROVIDERS:
-        problems.append(f"unknown voice.provider {provider!r}")
-    elif not env.get(VOICE_PROVIDERS[provider]):
-        problems.append(f"voice.provider {provider} needs {VOICE_PROVIDERS[provider]} in Archon's env (~/.archon/.env)")
     voice_id = _get(raw, "voice", "voice_id")
-    if not voice_id:
-        problems.append("voice.voice_id is required")
+    timings = _get(raw, "voice", "timings", default="auto")
+    if provider not in VOICE_KEYS:
+        problems.append(f"unknown voice.provider {provider!r}; known: {', '.join(VOICE_KEYS)}")
+    else:
+        key = VOICE_KEYS[provider]
+        if key and not env.get(key):
+            problems.append(f"voice.provider {provider} needs {key} in Archon's env (~/.archon/.env)")
+        if provider in NEEDS_VOICE_ID and not voice_id:
+            problems.append(f"voice.voice_id is required for {provider}")
+    if timings not in TIMINGS:
+        problems.append(f"voice.timings must be auto or align (got {timings!r})")
 
     # Format
     fmt_name = raw.get("format", "shorts")
@@ -152,6 +157,7 @@ def resolve(raw: dict, kind: str, base_dir: Path, env: dict[str, str]) -> dict:
             "provider": provider,
             "voice_id": voice_id,
             "model": _get(raw, "voice", "model"),
+            "timings": timings,
         },
         "format": fmt.to_dict() if fmt else None,
         "length_s": {"min": length_min, "max": length_max},
