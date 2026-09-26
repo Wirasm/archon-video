@@ -275,10 +275,16 @@ nodes:
 
   # The editor writes the whole edit as a HyperFrames composition and checks it
   # with the CLI; it needs a shell, files and image reading, nothing else.
+  # The installed HyperFrames skills carry the framework's rules; preflight
+  # checks this list is installed. Claude and Pi load it from here; Codex ignores
+  # the field, so editor.md also names each skill as $skill-name.
+  # Not `hyperframes` or `faceless-explainer`: those are front doors that run
+  # their own intake and would compete with this pipeline.
   - id: editor
     command: editor
     model: large
     allowed_tools: [Read, Write, Edit, Bash, Glob, Grep]
+    skills: [hyperframes-core, hyperframes-animation, hyperframes-keyframes, hyperframes-creative, hyperframes-audio, hyperframes-registry]
     depends_on: [assemble]
     output_format:
       type: object
