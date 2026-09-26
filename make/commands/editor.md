@@ -38,9 +38,9 @@ Short-form checks, to find problems rather than to fill a quota:
 
 How to build it:
 
-- Use $hyperframes-core before writing any HTML and follow it over anything in this prompt. Use $hyperframes-animation and $hyperframes-keyframes for motion, $hyperframes-creative for type, colour and pacing, and $hyperframes-audio for the music level, ducking and any sound effects.
+- Use $hyperframes-core before writing any HTML and follow its composition rules over anything in this prompt. Two things in this prompt still win over every skill: never preview or render (this pipeline renders next), and run the CLI only as pinned below. Use $hyperframes-animation and $hyperframes-keyframes for motion, $hyperframes-creative for type, colour and pacing, and $hyperframes-audio for the music level, ducking and any sound effects.
 - Before hand-building a named look, transition or effect, use $hyperframes-registry: run `npx -y $preflight.output.hyperframes catalog --query "<the look>"` and install a fitting block instead of rebuilding it.
-- Run every HyperFrames command as `npx -y $preflight.output.hyperframes <command>`, never an unpinned `hyperframes`: the render uses that exact version.
+- Run every HyperFrames command as `npx -y $preflight.output.hyperframes <command>`, including where a skill writes `npx hyperframes`: the render uses that exact version.
 - The composition is a standalone root in `index.html`, sized to the format's width and height. Its `data-duration` is the render length.
 
 Then check your work, and fix until it passes:

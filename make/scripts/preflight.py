@@ -43,7 +43,9 @@ def check_binaries() -> list[str]:
 def check_skills() -> list[str]:
     """The editor node's `skills:` list in make.yaml is the one list; check it is installed."""
     workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / "make.yaml").read_text())
-    editor = next(node for node in workflow["nodes"] if node["id"] == "editor")
+    editor = next((node for node in workflow["nodes"] if node["id"] == "editor"), None)
+    if editor is None:
+        return ["make.yaml has no editor node, so its skills cannot be checked"]
     missing = hyperframes.missing_skills(editor["skills"], hyperframes.skill_roots(Path.cwd(), Path.home()))
     if not missing:
         return []
