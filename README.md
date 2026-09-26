@@ -17,6 +17,7 @@ Early. Footage comes from Pexels stock, in the 9:16 formats, with any of four vo
 - Archon with workflow-pack support (`archon plugin install` for workflow packs).
 - `ffmpeg` and `ffprobe`.
 - Node 22 or newer (`npx` runs the pinned HyperFrames CLI, which downloads its own Chrome on first use).
+- The HyperFrames skills the editor loads: `npx hyperframes skills update hyperframes-core hyperframes-animation hyperframes-keyframes hyperframes-creative hyperframes-audio hyperframes-registry`. A workflow pack cannot ship skills, so preflight checks they are installed (under `.claude/skills/`, `.agents/skills/` or `~/.codex/skills/`) and names any that are missing. Keep them on the release the pack pins in `.shared/vidlib/hyperframes.py`; `npx hyperframes skills check` compares.
 - [`uv`](https://docs.astral.sh/uv/). Script nodes run on it and install their own Python packages.
 - An Archon agent provider. The footage picker pins `provider: claude` because it must open images; the director and editor use the `large` tier.
 

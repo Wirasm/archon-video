@@ -40,6 +40,21 @@ def check_binaries() -> list[str]:
     return problems
 
 
+def check_skills() -> list[str]:
+    """The editor node's `skills:` list in make.yaml is the one list; check it is installed."""
+    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / "make.yaml").read_text())
+    editor = next((node for node in workflow["nodes"] if node["id"] == "editor"), None)
+    if editor is None:
+        return ["make.yaml has no editor node, so its skills cannot be checked"]
+    missing = hyperframes.missing_skills(editor["skills"], hyperframes.skill_roots(Path.cwd(), Path.home()))
+    if not missing:
+        return []
+    return [
+        f"the editor's HyperFrames skills are not installed ({', '.join(missing)}); "
+        "install them with: npx hyperframes skills update " + " ".join(missing)
+    ]
+
+
 def recent_hooks(limit: int = 10) -> list[str]:
     library = state_dir() / "library.jsonl"
     if not library.exists():
@@ -56,7 +71,7 @@ def main() -> None:
     if not config_path.is_absolute():
         config_path = Path.cwd() / config_path
 
-    problems = check_binaries()
+    problems = check_binaries() + check_skills()
     if not config_path.exists():
         problems.append(
             f"no config at {config_path}; copy video.config.example.yaml from the pack to your project as video.config.yaml"

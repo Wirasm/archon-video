@@ -27,6 +27,9 @@ $preflight.output.music
 - Picture: the kind of footage, framing, camera movement, colour and grade, and how shots relate to what is being said at that moment.
 - Text on screen: whether there are captions at all, and if so their style, size, position, timing and emphasis; any titles, numbers or labels; how type moves. Most feed viewers watch without sound, and platform UI covers the edges of the frame.
 - Motion and transitions: hard cuts, match cuts, speed changes, zooms, masks, graphics, or restraint. Say what fits this video, not what is common.
+- The hook and its payoff: what the viewer gains by watching to the end, what is on screen by second 3 that promises it, and when the payoff lands.
+- One open question: plant it early, move it forward where the viewer can see it, and answer it before the end. A shot that recurs is not an open question on its own.
+- What the pictures add: the narration carries the words, so pictures show the example, the relationship or the consequence. Do not restate the narration as a headline on screen.
 - Sound: whether to use music, which track from the library (by path) or none, how loud against the voice, where it drops, swells or stops, and any silence.
 
 Let the brief lead. A calm explainer and a hype teaser should not look alike, and neither should look like a template. The brand block is guidance: use its colours, fonts and look as a palette, and obey its constraints. Lessons from reviewed videos are evidence to weigh, not rules.

@@ -28,20 +28,24 @@ $assemble.output.sheets
 
 ## Making it
 
-Edit like a professional editor would for this brief, audience and platform. The treatment is your direction; where it is silent, decide. Some craft to weigh, not rules: the first frame and first second decide whether a feed viewer stays; cuts land best where the meaning or the sound moves; rhythm should vary with the content; text on screen must be readable on a phone, clear of the edges where platform UI sits, and never cover the thing the shot is about; footage should show what is being said at that moment; music, if any, sits under the voice and can drop out for emphasis. The narration file is the spine: place it so every word is heard, and let the video run a moment past the last word only if the ending needs it.
+Edit like a professional editor would for this brief, audience and platform. The treatment is your direction; where it is silent, decide. Some craft to weigh, not rules: cuts land best where the meaning or the sound moves; rhythm should vary with the content; text on screen must be readable on a phone, clear of the edges where platform UI sits, and never cover the thing the shot is about; footage should show what is being said at that moment; music, if any, sits under the voice and can drop out for emphasis. The narration file is the spine: place it so every word is heard, and let the video run a moment past the last word only if the ending needs it.
 
-The HyperFrames contract (run `npx -y $preflight.output.hyperframes docs <topic>` for topics: data-attributes, compositions, gsap, rendering, troubleshooting):
+Short-form checks, to find problems rather than to fill a quota:
 
-- Standalone root: `<div id="root" data-composition-id="main" data-start="0" data-width="W" data-height="H" data-duration="SECONDS">` directly in `<body>`, sized `width:100%;height:100%`, with the format's width and height. `data-duration` is the render length.
-- Timed elements carry `data-start` and `data-duration` (seconds). Footage: `<video id=".." src="assets/n01.mp4" data-start data-duration data-media-start="<source in-point>" muted playsinline>`, optional `data-playback-rate`. Never put a timed `<video>` inside another element that has `data-start`. Audio is separate `<audio id=".." src=".." data-start data-duration data-volume>`; every `<audio>` needs an id; volume over time goes in `data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":1},...]}]}'` with `t` relative to the clip start.
-- One `gsap.timeline({ paused: true })`, registered last as `window.__timelines["main"] = tl`. Load GSAP from `https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js`. No `repeat: -1`, no clocks, no unseeded randomness.
-- Never tween `visibility`, `display` or `autoAlpha` on a timed element; animate a child or its opacity. Do not give an element a CSS `transform` and also tween that property; set the start state with `gsap.fromTo`.
-- A named `font-family` needs an `@font-face` pointing at a local file in `assets/fonts/`; otherwise use a generic family.
-- Video has no sound; `object-fit: cover` and `object-position` reframe it.
+- Watch the first 3 seconds as a stranger scrolling with the sound off. If they would not know why to stay until the end, fix the opening before anything else.
+- A picture that repeats the narration as a headline adds nothing. Show the example, the relationship or the consequence instead.
+- Pacing numbers (a change every second or two) find dead stretches; they are not a schedule. Never add a cut or an effect only to hit a rate.
+
+How to build it:
+
+- Use $hyperframes-core before writing any HTML and follow its composition rules over anything in this prompt. Two things in this prompt still win over every skill: never preview or render (this pipeline renders next), and run the CLI only as pinned below. Use $hyperframes-animation and $hyperframes-keyframes for motion, $hyperframes-creative for type, colour and pacing, and $hyperframes-audio for the music level, ducking and any sound effects.
+- Before hand-building a named look, transition or effect, use $hyperframes-registry: run `npx -y $preflight.output.hyperframes catalog --query "<the look>"` and install a fitting block instead of rebuilding it.
+- Run every HyperFrames command as `npx -y $preflight.output.hyperframes <command>`, including where a skill writes `npx hyperframes`: the render uses that exact version.
+- The composition is a standalone root in `index.html`, sized to the format's width and height. Its `data-duration` is the render length.
 
 Then check your work, and fix until it passes:
 
 1. `cd $ARTIFACTS_DIR/edit && npx -y $preflight.output.hyperframes lint` and then `check`. Fix every error.
-2. `npx -y $preflight.output.hyperframes snapshot --at <times>` at moments that matter (the opening, cuts, text moments, the ending) and open the images with the Read tool. Look at them as a viewer would. Fix what is wrong: text cut off or unreadable, a frame that does not show what is being said, a cut that lands badly.
+2. `npx -y $preflight.output.hyperframes snapshot --at <times>` at moments that matter (the opening, cuts, text moments, the ending) and open the images with the Read tool. Look at them as a viewer would. Fix what is wrong: text cut off or unreadable, a frame that does not show what is being said, a cut that lands badly. Snapshots are stills, not a viewing: do not claim motion or timing you have not checked.
 
-Do not render the video; the next step does that. When you are done, return the composition's `duration` in seconds (the root `data-duration`) and a `summary` of the edit you made and why, in a few sentences.
+Do not render or preview the video; the next step renders it. When you are done, return the composition's `duration` in seconds (the root `data-duration`) and a `summary` of the edit you made and why, in a few sentences.
